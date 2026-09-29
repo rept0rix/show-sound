@@ -12,7 +12,8 @@ public struct DiscoveredAudioApp: Identifiable, Equatable {
     public var isSharedToCall: Bool
     public var isRunning: Bool
     public var isPlaying: Bool
-    public var nowPlaying: String?
+    public var detailText: String?  // e.g. "♫ Track Name • Artist" or "🌐 Tab: YouTube"
+    public var outputDestination: String // e.g. "Speakers (Ch 1/2)" or "AirPods Pro"
     public var activityLevelL: Float // 0.0 to 1.0 (Left Channel level)
     public var activityLevelR: Float // 0.0 to 1.0 (Right Channel level)
     
@@ -26,7 +27,8 @@ public struct DiscoveredAudioApp: Identifiable, Equatable {
         isSharedToCall: Bool = false,
         isRunning: Bool = true,
         isPlaying: Bool = false,
-        nowPlaying: String? = nil,
+        detailText: String? = nil,
+        outputDestination: String = "Speakers (Ch 1/2)",
         activityLevelL: Float = 0.0,
         activityLevelR: Float = 0.0
     ) {
@@ -39,7 +41,8 @@ public struct DiscoveredAudioApp: Identifiable, Equatable {
         self.isSharedToCall = isSharedToCall
         self.isRunning = isRunning
         self.isPlaying = isPlaying
-        self.nowPlaying = nowPlaying
+        self.detailText = detailText
+        self.outputDestination = outputDestination
         self.activityLevelL = activityLevelL
         self.activityLevelR = activityLevelR
     }
@@ -50,7 +53,7 @@ public final class AppDetector: ObservableObject {
     
     @Published public private(set) var apps: [DiscoveredAudioApp] = []
     @Published public private(set) var anyAppPlaying: Bool = false
-    @Published public private(set) var activeAudioSourceTitle: String = "Mac Output"
+    @Published public private(set) var activeAudioSourceTitle: String = "Stereo Output"
     
     private let knownAudioBundleIDs: Set<String> = [
         "com.spotify.client",
@@ -82,7 +85,7 @@ public final class AppDetector: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var monitorTimer: Timer?
     private var meterTimer: Timer?
-    private let queryQueue = DispatchQueue(label: "com.showsound.appmonitor", qos: .utility)
+    private let queryQueue = DispatchQueue(label: "com.showsound.appmonitor", qos: .userInitiated)
     
     public init() {
         refreshRunningApps()
@@ -102,9 +105,10 @@ public final class AppDetector: ObservableObject {
         
         let myPID = ProcessInfo.processInfo.processIdentifier
         let myBundleID = Bundle.main.bundleIdentifier ?? "com.showsound.app"
+        let currentDevName = AudioDeviceManager.shared.currentDeviceName
         
         for app in runningApps where app.activationPolicy == .regular {
-            // Strictly exclude Show Sound itself from being listed as an audio app in its own mixer
+            // Strictly exclude Show Sound itself
             if app.processIdentifier == myPID { continue }
             guard let bundleID = app.bundleIdentifier else { continue }
             if bundleID == myBundleID || bundleID == "com.showsound.app" { continue }
@@ -117,7 +121,6 @@ public final class AppDetector: ObservableObject {
                 continue
             }
             
-            // Also exclude Finder, Dock, System items
             if bundleID == "com.apple.finder" || bundleID == "com.apple.dock" {
                 continue
             }
@@ -147,8 +150,8 @@ public final class AppDetector: ObservableObject {
                 let muted = saved?.isMuted ?? false
                 let call = saved?.isSharedToCall ?? false
                 
-                // Preserve previous isPlaying / nowPlaying if already found
                 let prev = apps.first(where: { $0.id == bundleID })
+                let dest = call ? "Call Mic + Output" : currentDevName
                 
                 detected.append(
                     DiscoveredAudioApp(
@@ -161,7 +164,8 @@ public final class AppDetector: ObservableObject {
                         isSharedToCall: call,
                         isRunning: true,
                         isPlaying: prev?.isPlaying ?? false,
-                        nowPlaying: prev?.nowPlaying,
+                        detailText: prev?.detailText,
+                        outputDestination: dest,
                         activityLevelL: prev?.activityLevelL ?? 0.0,
                         activityLevelR: prev?.activityLevelR ?? 0.0
                     )
@@ -197,9 +201,9 @@ public final class AppDetector: ObservableObject {
         }
     }
     
-    // MARK: - Playback State Polling (Spotify / Music / Media)
+    // MARK: - Playback & Active Tab Querying
     private func startPlaybackPolling() {
-        monitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        monitorTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             self?.queryPlaybackStates()
         }
     }
@@ -207,25 +211,27 @@ public final class AppDetector: ObservableObject {
     private func queryPlaybackStates() {
         queryQueue.async { [weak self] in
             guard let self = self else { return }
-            var spotifyPlaying = false
-            var spotifyTrack: String? = nil
+            let currentDevName = AudioDeviceManager.shared.currentDeviceName
             
             // 1. Spotify
+            var spotifyPlaying = false
+            var spotifyTrack: String? = nil
             let spotifyScript = """
             if application "Spotify" is running then
                 tell application "Spotify"
-                    set s to player state as string
-                    if s is "playing" then
-                        set t to name of current track
-                        set a to artist of current track
-                        return s & "||" & t & " • " & a
-                    else
-                        return s & "||"
-                    end if
+                    try
+                        set s to player state as string
+                        if s is "playing" then
+                            set t to name of current track
+                            set a to artist of current track
+                            return "playing||" & t & " • " & a
+                        else
+                            return "paused||"
+                        end if
+                    end try
                 end tell
-            else
-                return "not_running||"
             end if
+            return "closed||"
             """
             if let result = NSAppleScript(source: spotifyScript)?.executeAndReturnError(nil).stringValue {
                 let parts = result.components(separatedBy: "||")
@@ -237,24 +243,41 @@ public final class AppDetector: ObservableObject {
                 }
             }
             
-            // 2. Apple Music
+            // 2. Google Chrome Active Tab
+            var chromeTab: String? = nil
+            let chromeScript = """
+            if application "Google Chrome" is running then
+                tell application "Google Chrome"
+                    try
+                        return title of active tab of front window
+                    end try
+                end tell
+            end if
+            return ""
+            """
+            if let res = NSAppleScript(source: chromeScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
+                chromeTab = res
+            }
+            
+            // 3. Apple Music
             var musicPlaying = false
             var musicTrack: String? = nil
             let musicScript = """
             if application "Music" is running then
                 tell application "Music"
-                    set s to player state as string
-                    if s is "playing" then
-                        set t to name of current track
-                        set a to artist of current track
-                        return s & "||" & t & " • " & a
-                    else
-                        return s & "||"
-                    end if
+                    try
+                        set s to player state as string
+                        if s is "playing" then
+                            set t to name of current track
+                            set a to artist of current track
+                            return "playing||" & t & " • " & a
+                        else
+                            return "paused||"
+                        end if
+                    end try
                 end tell
-            else
-                return "not_running||"
             end if
+            return "closed||"
             """
             if let result = NSAppleScript(source: musicScript)?.executeAndReturnError(nil).stringValue {
                 let parts = result.components(separatedBy: "||")
@@ -266,26 +289,98 @@ public final class AppDetector: ObservableObject {
                 }
             }
             
+            // 4. Safari Tab
+            var safariTab: String? = nil
+            let safariScript = """
+            if application "Safari" is running then
+                tell application "Safari"
+                    try
+                        return name of current tab of front window
+                    end try
+                end tell
+            end if
+            return ""
+            """
+            if let res = NSAppleScript(source: safariScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
+                safariTab = res
+            }
+            
+            // 5. Arc Browser Tab
+            var arcTab: String? = nil
+            let arcScript = """
+            if application "Arc" is running then
+                tell application "Arc"
+                    try
+                        return title of active tab of front window
+                    end try
+                end tell
+            end if
+            return ""
+            """
+            if let res = NSAppleScript(source: arcScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
+                arcTab = res
+            }
+            
             DispatchQueue.main.async {
                 var anyActive = false
                 var activeTitle = "Stereo Output"
                 
                 for i in 0..<self.apps.count {
                     let bid = self.apps[i].id
+                    let isCallShared = self.apps[i].isSharedToCall
+                    self.apps[i].outputDestination = isCallShared ? "Call Mic + Output" : currentDevName
+                    
                     if bid == "com.spotify.client" {
                         self.apps[i].isPlaying = spotifyPlaying
-                        self.apps[i].nowPlaying = spotifyTrack
+                        if let track = spotifyTrack {
+                            self.apps[i].detailText = "♫ \(track)"
+                        } else {
+                            self.apps[i].detailText = spotifyPlaying ? "♫ Playing Music" : "Paused"
+                        }
                         if spotifyPlaying {
                             anyActive = true
                             activeTitle = spotifyTrack.map { "Spotify: \($0)" } ?? "Spotify Music"
                         }
+                    } else if bid == "com.google.Chrome" {
+                        if let tab = chromeTab, !tab.isEmpty {
+                            self.apps[i].detailText = "🌐 Tab: \(tab)"
+                            // If tab contains media keywords, flag as potentially active
+                            let lowerTab = tab.lowercased()
+                            let isMediaTab = lowerTab.contains("youtube") || lowerTab.contains("spotify") || lowerTab.contains("soundcloud") || lowerTab.contains("meet") || lowerTab.contains("zoom") || lowerTab.contains("netflix") || lowerTab.contains("music") || lowerTab.contains("video")
+                            if isMediaTab {
+                                self.apps[i].isPlaying = true
+                                anyActive = true
+                            }
+                        } else {
+                            self.apps[i].detailText = "Web Audio"
+                        }
                     } else if bid == "com.apple.Music" {
                         self.apps[i].isPlaying = musicPlaying
-                        self.apps[i].nowPlaying = musicTrack
+                        if let track = musicTrack {
+                            self.apps[i].detailText = "♫ \(track)"
+                        } else {
+                            self.apps[i].detailText = musicPlaying ? "♫ Playing Music" : "Paused"
+                        }
                         if musicPlaying {
                             anyActive = true
                             activeTitle = musicTrack.map { "Music: \($0)" } ?? "Apple Music"
                         }
+                    } else if bid == "com.apple.Safari" {
+                        if let tab = safariTab, !tab.isEmpty {
+                            self.apps[i].detailText = "🌐 Tab: \(tab)"
+                        } else {
+                            self.apps[i].detailText = "Web Audio"
+                        }
+                    } else if bid == "company.thebrowser.Browser" {
+                        if let tab = arcTab, !tab.isEmpty {
+                            self.apps[i].detailText = "🌐 Tab: \(tab)"
+                        }
+                    } else if bid == "net.whatsapp.WhatsApp" {
+                        self.apps[i].detailText = "💬 Voice Calls & Audio"
+                    } else if bid == "ru.keepcoder.Telegram" {
+                        self.apps[i].detailText = "💬 Voice & Media Channels"
+                    } else if bid == "us.zoom.xos" {
+                        self.apps[i].detailText = "📞 Conference Audio"
                     }
                 }
                 

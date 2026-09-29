@@ -478,7 +478,7 @@ public struct MixerView: View {
 
     private func appRow(track: DiscoveredAudioApp) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            // App Header Row: Icon, Title, Sound Activity Indicator, Mute, Volume %
+            // App Header Row: Icon, Title, [RED BOX AREA: Sound Activity & Media/Tab Detail & Destination], Mute, Volume %
             HStack(spacing: 8) {
                 // App Icon
                 if let icon = track.icon {
@@ -498,54 +498,63 @@ public struct MixerView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text(track.name)
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
+                // App Name
+                Text(track.name)
+                    .font(.system(size: 11.5, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
 
-                        // ACTIVE SOUND INDICATOR NEXT TO APP
-                        if track.isPlaying {
-                            HStack(spacing: 3) {
-                                EqualizerWaveView(isPlaying: true, color: .green)
-                                Text("PLAYING")
-                                    .font(.system(size: 7.5, weight: .heavy, design: .monospaced))
-                                    .foregroundColor(.green)
-                            }
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color.green.opacity(0.18)))
-                            .overlay(Capsule().stroke(Color.green.opacity(0.5), lineWidth: 0.7))
-                        } else {
-                            Text("IDLE")
-                                .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.7))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(Color.white.opacity(0.05)))
+                // THE USER'S RED BOX AREA: Live Sound Status, Playing/Tab Detail, and Output Destination ("מי יוצא מאיפה")
+                HStack(spacing: 5) {
+                    // Sound Activity Indicator
+                    if track.isPlaying {
+                        HStack(spacing: 3) {
+                            EqualizerWaveView(isPlaying: true, color: .green)
+                            Text("ACTIVE")
+                                .font(.system(size: 7.5, weight: .heavy, design: .monospaced))
+                                .foregroundColor(.green)
                         }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.green.opacity(0.18)))
+                        .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 0.8))
                     }
 
-                    // Track Name (if Spotify / Music playing)
-                    if let now = track.nowPlaying, !now.isEmpty {
-                        Text(now)
-                            .font(.system(size: 9))
-                            .foregroundColor(.cyan.opacity(0.85))
+                    // Playing track or Tab title
+                    if let detail = track.detailText, !detail.isEmpty {
+                        Text(detail)
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundColor(track.isPlaying ? .cyan : .secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
-                }
 
-                Spacer()
+                    Spacer(minLength: 2)
+
+                    // Output Route ("מי יוצא מאיפה")
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 7.5))
+                            .foregroundColor(.cyan)
+                        Text(track.outputDestination)
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.06)))
+                }
+                .padding(.horizontal, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Call Stream Pill
                 if model.shareMusicInCall {
                     Button(action: { appDetector.toggleCallShare(for: track.id) }) {
                         Text(track.isSharedToCall ? "In Call" : "+ Call")
-                            .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2.5)
+                            .font(.system(size: 8.5, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
                             .background(
                                 Capsule()
                                     .fill(track.isSharedToCall ? Color.cyan.opacity(0.3) : Color.white.opacity(0.08))
@@ -572,10 +581,10 @@ public struct MixerView: View {
                 Text("\(Int(round(track.volume * 100)))%")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(track.volume > 1.0 ? .orange : .white)
-                    .frame(width: 38, alignment: .trailing)
+                    .frame(width: 36, alignment: .trailing)
             }
 
-            // ACTIVE CHANNEL LEVEL METERS & SLIDERS (Direct Response to User Request)
+            // Sliders & Live Channel Stereo VU Meters
             HStack(spacing: 8) {
                 // Live Stereo Channel Level Bars right next to slider
                 VStack(spacing: 2) {
@@ -594,7 +603,7 @@ public struct MixerView: View {
                 }
                 .frame(width: 48)
 
-                // App Volume Slider (0% to 200%)
+                // App Volume Slider
                 Slider(value: Binding(
                     get: { track.volume },
                     set: { appDetector.setVolume(for: track.id, volume: $0) }
@@ -624,7 +633,7 @@ public struct MixerView: View {
                 .fill(Color.white.opacity(0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(track.isPlaying ? Color.cyan.opacity(0.3) : Color.white.opacity(0.06), lineWidth: 0.8)
+                        .stroke(track.isPlaying ? Color.cyan.opacity(0.35) : Color.white.opacity(0.06), lineWidth: 0.8)
                 )
         )
     }
