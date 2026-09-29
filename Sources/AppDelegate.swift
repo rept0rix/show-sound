@@ -88,13 +88,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
         let host = NSHostingView(rootView: MixerView())
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 410, height: 620),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 650),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Show Sound"
         window.appearance = NSAppearance(named: .vibrantDark)
+        window.backgroundColor = NSColor(calibratedRed: 0.07, green: 0.08, blue: 0.12, alpha: 1.0)
         window.contentView = host
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -107,7 +108,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private func setupPopover() {
         popover = NSPopover()
         popover.appearance = NSAppearance(named: .vibrantDark)
-        popover.contentSize = NSSize(width: 410, height: 620)
+        popover.contentSize = NSSize(width: 420, height: 650)
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(rootView: MixerView())

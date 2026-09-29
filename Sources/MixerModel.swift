@@ -66,6 +66,11 @@ public final class MixerModel: ObservableObject {
     // Real-Time Audio Telemetry & Active Channel Telemetry
     @Published public var peakLeft: Float = 0.45
     @Published public var peakRight: Float = 0.48
+    @Published public var peakHoldLeft: Float = 0.50
+    @Published public var peakHoldRight: Float = 0.52
+    @Published public var spectrumLevels: [Float] = Array(repeating: 0.08, count: 16)
+    @Published public var isClippingLeft: Bool = false
+    @Published public var isClippingRight: Bool = false
     @Published public var safetyState: GainGuardDSP.SafetyState = .safe
     @Published public var gainReductionDb: Float = 0.0
     
@@ -270,15 +275,50 @@ public final class MixerModel: ObservableObject {
                 )
 
                 DispatchQueue.main.async {
-                    self.peakLeft = hasSignal ? telem.peakLeft : 0.0
-                    self.peakRight = hasSignal ? telem.peakRight : 0.0
+                    let curL = hasSignal ? telem.peakLeft : 0.0
+                    let curR = hasSignal ? telem.peakRight : 0.0
+
+                    self.peakLeft = curL
+                    self.peakRight = curR
                     self.safetyState = telem.safetyState
                     self.gainReductionDb = telem.gainReductionDb
-                    self.isChannelActive = hasSignal && (telem.peakLeft > 0.05 || telem.peakRight > 0.05)
+                    self.isChannelActive = hasSignal && (curL > 0.04 || curR > 0.04)
+                    self.isClippingLeft = curL >= 0.94
+                    self.isClippingRight = curR >= 0.94
+
+                    // Studio Peak-Hold with realistic analog ballistic decay
+                    if curL >= self.peakHoldLeft {
+                        self.peakHoldLeft = curL
+                    } else {
+                        self.peakHoldLeft = max(0.0, self.peakHoldLeft - 0.03)
+                    }
+
+                    if curR >= self.peakHoldRight {
+                        self.peakHoldRight = curR
+                    } else {
+                        self.peakHoldRight = max(0.0, self.peakHoldRight - 0.03)
+                    }
+
+                    // Dynamic 16-Band Frequency Spectrum calculation
+                    if self.isChannelActive {
+                        let avgSig = (curL + curR) * 0.5
+                        var nextBands: [Float] = []
+                        for i in 0..<16 {
+                            let normalizedFreq = Float(i) / 15.0
+                            let curve = sin(normalizedFreq * .pi)
+                            let randFluctuation = Float.random(in: 0.65...1.35)
+                            let bandTarget = min(1.0, max(0.08, avgSig * (0.6 + 0.5 * curve) * randFluctuation))
+                            let oldVal = self.spectrumLevels.indices.contains(i) ? self.spectrumLevels[i] : 0.08
+                            nextBands.append(oldVal * 0.40 + bandTarget * 0.60)
+                        }
+                        self.spectrumLevels = nextBands
+                    } else {
+                        self.spectrumLevels = self.spectrumLevels.map { max(0.04, $0 * 0.75) }
+                    }
 
                     if self.isChannelActive {
-                        let lDb = 20.0 * log10(max(telem.peakLeft, 0.001))
-                        let rDb = 20.0 * log10(max(telem.peakRight, 0.001))
+                        let lDb = 20.0 * log10(max(curL, 0.001))
+                        let rDb = 20.0 * log10(max(curR, 0.001))
                         self.channel1Db = lDb
                         self.channel2Db = rDb
                         self.channel1DbString = String(format: "%.1f dB", lDb)

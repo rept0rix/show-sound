@@ -47,7 +47,7 @@ public struct MixerView: View {
                 }
                 .padding(16)
             }
-            .frame(maxHeight: 540)
+            .frame(maxHeight: 560)
 
             Divider()
                 .background(Color.white.opacity(0.12))
@@ -57,7 +57,8 @@ public struct MixerView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
         }
-        .frame(width: 410)
+        .frame(width: 420)
+        .preferredColorScheme(.dark)
         .background(
             ZStack {
                 Color(red: 0.07, green: 0.08, blue: 0.11)
@@ -453,76 +454,118 @@ public struct MixerView: View {
                 )
             }
 
-            // ACTIVE AUDIO CHANNELS & STUDIO VU METERS (Direct Response to User Request)
-            VStack(spacing: 6) {
-                HStack {
-                    HStack(spacing: 4) {
-                        Image(systemName: "waveform.path")
-                            .font(.system(size: 9))
+            // STUDIO HIGH-PRECISION AUDIO VISUALIZER & DUAL LED RACK
+            VStack(spacing: 8) {
+                // Visualizer Top Bar: Engine Status & Limiter Badge
+                HStack(alignment: .center) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(model.isChannelActive ? Color.green : Color.secondary.opacity(0.4))
+                            .frame(width: 6, height: 6)
+                            .shadow(color: model.isChannelActive ? .green : .clear, radius: 4)
+                        Text(model.isChannelActive ? "STEREO ENGINE LIVE" : "STEREO STANDBY")
+                            .font(.system(size: 8.5, weight: .heavy, design: .monospaced))
                             .foregroundColor(model.isChannelActive ? .green : .secondary)
-                        Text("ACTIVE AUDIO CHANNELS")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+
+                        Text("•")
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary.opacity(0.5))
+
+                        Text(model.deviceManager.currentDeviceName)
+                            .font(.system(size: 8.5, weight: .semibold))
                             .foregroundColor(.secondary)
+                            .lineLimit(1)
                     }
 
                     Spacer()
 
-                    // Active sound source indicator (e.g. Spotify track)
+                    // Pro Safety Status Badge
+                    safetyBadgeView
+                }
+
+                // dB Scale Ruler
+                VUDbScaleRuler()
+
+                // Channel Left (CH 1 • L)
+                ProSegmentedVUMeterRow(
+                    channel: "L",
+                    level: model.peakLeft,
+                    peakHold: model.peakHoldLeft,
+                    dbText: model.channel1DbString,
+                    isClipping: model.isClippingLeft,
+                    isActive: model.isChannelActive
+                )
+
+                // Channel Right (CH 2 • R)
+                ProSegmentedVUMeterRow(
+                    channel: "R",
+                    level: model.peakRight,
+                    peakHold: model.peakHoldRight,
+                    dbText: model.channel2DbString,
+                    isClipping: model.isClippingRight,
+                    isActive: model.isChannelActive
+                )
+
+                // Dynamic 16-Band Real-Time Spectrum Analyzer
+                MultiBandAudioSpectrumView(
+                    bands: model.spectrumLevels,
+                    isActive: model.isChannelActive
+                )
+                .padding(.top, 2)
+
+                // Bottom Info Strip: Currently Playing App / Track Name + 55Hz Guard
+                HStack(spacing: 6) {
                     if appDetector.anyAppPlaying {
                         HStack(spacing: 4) {
                             EqualizerWaveView(isPlaying: true, color: .green)
                             Text(appDetector.activeAudioSourceTitle)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundColor(.cyan)
                                 .lineLimit(1)
-                                .truncationMode(.tail)
                         }
                     } else {
-                        Text("Ch 1 & Ch 2 Direct")
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary.opacity(0.7))
+                        HStack(spacing: 4) {
+                            Image(systemName: "headphones")
+                                .font(.system(size: 8.5))
+                                .foregroundColor(.secondary)
+                            Text("Direct 24-bit / 48kHz Output Bus")
+                                .font(.system(size: 8.5))
+                                .foregroundColor(.secondary.opacity(0.7))
+                        }
                     }
+
+                    Spacer()
+
+                    // 55Hz HPF Quick Toggle
+                    Toggle(isOn: $model.speakerProtection) {
+                        Text("55Hz Guard")
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    .toggleStyle(.checkbox)
                 }
-
-                // Channel 1: Left
-                ChannelVUMeterRow(
-                    channelBadge: "CH 1 • L",
-                    peak: model.peakLeft,
-                    dbText: model.channel1DbString,
-                    isActive: model.isChannelActive
-                )
-
-                // Channel 2: Right
-                ChannelVUMeterRow(
-                    channelBadge: "CH 2 • R",
-                    peak: model.peakRight,
-                    dbText: model.channel2DbString,
-                    isActive: model.isChannelActive
-                )
+                .padding(.top, 2)
             }
-            .padding(8)
+            .padding(10)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.black.opacity(0.25))
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.black.opacity(0.40))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.cyan.opacity(0.35),
+                                        Color.purple.opacity(0.20),
+                                        Color.white.opacity(0.06)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.0
+                            )
                     )
             )
-
-            // High-Pass Filter Toggle & Safety Badge
-            HStack {
-                Toggle(isOn: $model.speakerProtection) {
-                    Text("55Hz Speaker Protection (Cuts damaging sub-bass)")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-                .toggleStyle(.checkbox)
-
-                Spacer()
-
-                safetyBadgeView
-            }
         }
         .padding(14)
         .background(
@@ -1183,48 +1226,183 @@ public struct EqualizerWaveView: View {
     }
 }
 
-// MARK: - Helper Views: Channel Stereo VU Meter Row
-public struct ChannelVUMeterRow: View {
-    let channelBadge: String // "CH 1 • L" or "CH 2 • R"
-    let peak: Float
+// MARK: - Helper Views: Pro Audio dB Scale Ruler
+public struct VUDbScaleRuler: View {
+    public var body: some View {
+        HStack(spacing: 0) {
+            Spacer().frame(width: 30)
+
+            HStack {
+                Text("-48")
+                Spacer()
+                Text("-24")
+                Spacer()
+                Text("-18")
+                Spacer()
+                Text("-12")
+                Spacer()
+                Text("-6")
+                Spacer()
+                Text("-3")
+                Spacer()
+                Text("0dB")
+                    .foregroundColor(Color.yellow)
+                Spacer()
+                Text("+3")
+                    .foregroundColor(Color.red)
+            }
+            .font(.system(size: 7.5, weight: .heavy, design: .monospaced))
+            .foregroundColor(Color.secondary.opacity(0.8))
+
+            Spacer().frame(width: 48)
+        }
+    }
+}
+
+// MARK: - Helper Views: Pro Segmented LED VU Meter Row
+public struct ProSegmentedVUMeterRow: View {
+    let channel: String // "L" or "R"
+    let level: Float // 0.0 to 1.0
+    let peakHold: Float // 0.0 to 1.0
     let dbText: String
+    let isClipping: Bool
     let isActive: Bool
+
+    private let totalSegments: Int = 26
 
     public var body: some View {
         HStack(spacing: 8) {
-            Text(channelBadge)
-                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                .foregroundColor(isActive ? .cyan : .secondary)
-                .frame(width: 48, alignment: .leading)
+            // Channel Badge (e.g. [ L ] or [ R ])
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isActive ? Color.cyan.opacity(0.18) : Color.white.opacity(0.06))
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(isActive ? Color.cyan.opacity(0.6) : Color.white.opacity(0.12), lineWidth: 0.8)
+                Text(channel)
+                    .font(.system(size: 9.5, weight: .heavy, design: .monospaced))
+                    .foregroundColor(isActive ? .cyan : .secondary)
+            }
+            .frame(width: 22, height: 16)
 
-            // Segmented Gradient VU Track
+            // Segmented LED Grid
             GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.08))
+                let spacing: CGFloat = 2.0
+                let totalSpacing = spacing * CGFloat(totalSegments - 1)
+                let segWidth = max(2.0, (geo.size.width - totalSpacing) / CGFloat(totalSegments))
+                let activeCount = Int(round(CGFloat(totalSegments) * CGFloat(max(0.0, min(1.0, level)))))
+                let peakHoldIndex = Int(round(CGFloat(totalSegments - 1) * CGFloat(max(0.0, min(1.0, peakHold)))))
 
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.green,
-                                    Color.cyan,
-                                    peak > 0.75 ? Color.orange : Color.cyan
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(0, min(geo.size.width * CGFloat(peak), geo.size.width)))
-                        .shadow(color: isActive ? Color.cyan.opacity(0.5) : .clear, radius: 3)
+                HStack(spacing: spacing) {
+                    ForEach(0..<totalSegments, id: \.self) { idx in
+                        let isLit = isActive && (idx < activeCount)
+                        let isPeakHold = isActive && (idx == peakHoldIndex) && (idx >= activeCount)
+                        let segColor = colorForSegment(idx)
+                        let cellFill = isLit ? segColor : (isPeakHold ? Color.white : Color.white.opacity(0.07))
+                        let glowColor = isLit ? segColor.opacity(idx >= 22 ? 0.8 : 0.4) : (isPeakHold ? Color.white.opacity(0.6) : Color.clear)
+
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(cellFill)
+                            .frame(width: segWidth, height: 14)
+                            .shadow(color: glowColor, radius: isLit ? 2 : 1)
+                    }
                 }
             }
-            .frame(height: 5)
+            .frame(height: 14)
 
-            Text(dbText)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(isActive ? (peak > 0.8 ? .orange : .white) : .secondary.opacity(0.6))
-                .frame(width: 46, alignment: .trailing)
+            // Numerical dB Readout
+            HStack(spacing: 2) {
+                if isClipping {
+                    Text("CLIP")
+                        .font(.system(size: 7.5, weight: .black, design: .monospaced))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.red.opacity(0.25)))
+                }
+                Text(dbText)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(isClipping ? .red : (isActive ? (level > 0.8 ? .orange : .white) : .secondary.opacity(0.6)))
+                    .frame(width: 44, alignment: .trailing)
+            }
+        }
+    }
+
+    private func colorForSegment(_ idx: Int) -> Color {
+        if idx >= 23 {
+            return Color(red: 1.0, green: 0.22, blue: 0.22) // Clip Red
+        } else if idx >= 19 {
+            return Color(red: 1.0, green: 0.65, blue: 0.15) // Warning Amber
+        } else if idx >= 14 {
+            return Color(red: 0.15, green: 0.88, blue: 0.95) // Dynamic Cyan
+        } else {
+            return Color(red: 0.18, green: 0.95, blue: 0.45) // Safe Green
+        }
+    }
+}
+
+// MARK: - Helper Views: Multi-Band Audio Spectrum Visualizer
+public struct MultiBandAudioSpectrumView: View {
+    let bands: [Float] // 16 normalized values
+    let isActive: Bool
+
+    public var body: some View {
+        VStack(spacing: 3) {
+            GeometryReader { geo in
+                let spacing: CGFloat = 3.0
+                let count = max(bands.count, 1)
+                let totalSpacing = spacing * CGFloat(count - 1)
+                let barWidth = max(3.0, (geo.size.width - totalSpacing) / CGFloat(count))
+                let maxHeight = geo.size.height
+
+                HStack(alignment: .bottom, spacing: spacing) {
+                    ForEach(0..<count, id: \.self) { idx in
+                        let val = bands.indices.contains(idx) ? bands[idx] : 0.05
+                        let barHeight = max(4.0, CGFloat(val) * maxHeight)
+
+                        VStack(spacing: 1.5) {
+                            if isActive && val > 0.2 {
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(idx >= 12 ? Color.red : (idx >= 8 ? Color.orange : Color.cyan))
+                                    .frame(width: barWidth, height: 2)
+                                    .shadow(color: Color.cyan.opacity(0.5), radius: 2)
+                            }
+
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            idx >= 13 ? Color.red : (idx >= 9 ? Color.orange : Color.cyan),
+                                            Color.purple.opacity(0.85),
+                                            Color.blue.opacity(0.7)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: barWidth, height: barHeight)
+                                .shadow(color: isActive ? Color.cyan.opacity(0.3) : .clear, radius: 2)
+                        }
+                        .frame(height: maxHeight, alignment: .bottom)
+                    }
+                }
+            }
+            .frame(height: 38)
+
+            HStack {
+                Text("32Hz")
+                Spacer()
+                Text("125Hz")
+                Spacer()
+                Text("500Hz")
+                Spacer()
+                Text("2kHz")
+                Spacer()
+                Text("8kHz")
+                Spacer()
+                Text("16kHz")
+            }
+            .font(.system(size: 7, weight: .bold, design: .monospaced))
+            .foregroundColor(Color.secondary.opacity(0.7))
         }
     }
 }
