@@ -7,31 +7,58 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var eventMonitor: Any?
+    @Published public private(set) var availableUpdateVersion: String? = nil
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
         setupStatusItem()
         setupPopover()
+        
+        AppUpdate.restoreBadge()
+        AppUpdate.checkOnLaunch()
     }
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-            if let image = NSImage(systemSymbolName: "speaker.wave.3.fill", accessibilityDescription: "Show Sound")?.withSymbolConfiguration(config) {
-                image.isTemplate = true
-                button.image = image
-            } else {
-                button.title = "🔊"
-            }
+            updateMenuBarButton()
             button.target = self
             button.action = #selector(togglePopover(_:))
         }
     }
 
+    private func updateMenuBarButton() {
+        guard let button = statusItem.button else { return }
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        let symbolName = (availableUpdateVersion != nil) ? "speaker.wave.3.bubble.fill" : "speaker.wave.3.fill"
+        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Show Sound")?.withSymbolConfiguration(config) {
+            image.isTemplate = true
+            button.image = image
+        } else {
+            button.title = (availableUpdateVersion != nil) ? "🔊•" : "🔊"
+        }
+        button.toolTip = availableUpdateVersion.map { "Show Sound — Update \($0) is ready" } ?? "Show Sound"
+    }
+
+    public func noteUpdate(_ version: String?) {
+        availableUpdateVersion = version
+        updateMenuBarButton()
+    }
+
+    public func relaunchAfterUpdate() {
+        let url = Bundle.main.bundleURL
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
     private func setupPopover() {
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 560)
+        popover.contentSize = NSSize(width: 390, height: 580)
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(rootView: MixerView())

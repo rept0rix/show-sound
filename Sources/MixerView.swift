@@ -93,7 +93,7 @@ public struct MixerView: View {
                 HStack(spacing: 6) {
                     Text("Show Sound")
                         .font(.system(size: 14, weight: .bold))
-                    Text("1.0")
+                    Text(ShowSoundSupport.version)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 5)
@@ -673,7 +673,7 @@ public struct MixerView: View {
 
     // MARK: - Footer
     private var footerSection: some View {
-        HStack {
+        HStack(spacing: 8) {
             Button(action: {
                 if let url = URL(string: "https://rept0rix.github.io/show-sound/") {
                     NSWorkspace.shared.open(url)
@@ -686,6 +686,25 @@ public struct MixerView: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            if let updateVer = AppDelegate.shared.availableUpdateVersion {
+                Button("Update to v\(updateVer)") {
+                    AppUpdate.askAgain()
+                }
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.black)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.yellow))
+                .buttonStyle(.plain)
+            } else {
+                Button("Check for Updates") {
+                    AppUpdate.checkManually()
+                }
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .buttonStyle(.plain)
+            }
 
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
