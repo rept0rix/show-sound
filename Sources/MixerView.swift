@@ -122,25 +122,40 @@ public struct MixerView: View {
 
             Spacer()
 
-            // GainGuard Hardware Protection Pill
-            HStack(spacing: 4) {
-                Image(systemName: model.speakerProtection ? "shield.checkmark.fill" : "shield.slash")
-                    .font(.system(size: 10))
-                    .foregroundColor(model.speakerProtection ? .green : .yellow)
-                Text(model.speakerProtection ? "GainGuard" : "Unprotected")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(model.speakerProtection ? .white : .yellow)
+            if model.masterBoost > 1.0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 9))
+                    Text("BOOST: \(model.boostFormattedTime)")
+                        .font(.system(size: 9.5, weight: .heavy, design: .monospaced))
+                }
+                .foregroundColor(.red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.red.opacity(0.18)))
+                .overlay(Capsule().stroke(Color.red.opacity(0.6), lineWidth: 0.8))
+                .shadow(color: Color.red.opacity(0.4), radius: 4)
+            } else {
+                // GainGuard Hardware Protection Pill
+                HStack(spacing: 4) {
+                    Image(systemName: model.speakerProtection ? "shield.checkmark.fill" : "shield.slash")
+                        .font(.system(size: 10))
+                        .foregroundColor(model.speakerProtection ? .green : .yellow)
+                    Text(model.speakerProtection ? "GainGuard" : "Unprotected")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(model.speakerProtection ? .white : .yellow)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(model.speakerProtection ? Color.green.opacity(0.15) : Color.yellow.opacity(0.15))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(model.speakerProtection ? Color.green.opacity(0.3) : Color.yellow.opacity(0.3), lineWidth: 0.8)
+                )
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill(model.speakerProtection ? Color.green.opacity(0.15) : Color.yellow.opacity(0.15))
-            )
-            .overlay(
-                Capsule()
-                    .stroke(model.speakerProtection ? Color.green.opacity(0.3) : Color.yellow.opacity(0.3), lineWidth: 0.8)
-            )
         }
     }
 
@@ -254,9 +269,9 @@ public struct MixerView: View {
                             }
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3.5)
-                            .background(Capsule().fill(Color.cyan.opacity(0.2)))
-                            .overlay(Capsule().stroke(Color.cyan.opacity(0.5), lineWidth: 1))
-                            .foregroundColor(.cyan)
+                            .background(Capsule().fill(model.masterBoost > 1.0 ? Color.red.opacity(0.2) : Color.cyan.opacity(0.2)))
+                            .overlay(Capsule().stroke(model.masterBoost > 1.0 ? Color.red.opacity(0.6) : Color.cyan.opacity(0.5), lineWidth: 1))
+                            .foregroundColor(model.masterBoost > 1.0 ? .red : .cyan)
                         }
                         .buttonStyle(.plain)
                         .help("Reset volume to standard 100% (0 dBFS unity)")
@@ -338,6 +353,104 @@ public struct MixerView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Increase volume by 10%")
+            }
+
+            // 100%+ OVERDRIVE BATTERY & SPEAKER PROTECTION BOX (User Requested)
+            if model.masterBoost > 1.0 {
+                VStack(spacing: 8) {
+                    HStack {
+                        HStack(spacing: 5) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.red)
+                            Text("100%+ OVERDRIVE (SPEAKER & BATTERY GUARD)")
+                                .font(.system(size: 8.5, weight: .heavy, design: .monospaced))
+                                .foregroundColor(.red)
+                        }
+
+                        Spacer()
+
+                        // Live countdown badge
+                        HStack(spacing: 4) {
+                            Image(systemName: "timer")
+                                .font(.system(size: 10, weight: .bold))
+                            Text("Reset in \(model.boostFormattedTime)")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        }
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.red.opacity(0.18)))
+                        .overlay(Capsule().stroke(Color.red.opacity(0.6), lineWidth: 1))
+                    }
+
+                    // Countdown progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.white.opacity(0.08))
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.red, .orange],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(0, min(geo.size.width * CGFloat(model.boostProgress), geo.size.width)))
+                                .shadow(color: Color.red.opacity(0.5), radius: 3)
+                        }
+                    }
+                    .frame(height: 4)
+
+                    // Timer duration selector (3 Min, 5 Min, 10 Min)
+                    HStack(spacing: 6) {
+                        Text("Guard Timer:")
+                            .font(.system(size: 9.5))
+                            .foregroundColor(.secondary)
+
+                        ForEach([3, 5, 10], id: \.self) { mins in
+                            Button(action: { model.startBoostTimer(minutes: mins) }) {
+                                Text("\(mins)m")
+                                    .font(.system(size: 9.5, weight: model.boostTimerDurationMinutes == mins ? .heavy : .semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 5)
+                                            .fill(model.boostTimerDurationMinutes == mins ? Color.red : Color.white.opacity(0.08))
+                                    )
+                                    .foregroundColor(model.boostTimerDurationMinutes == mins ? .white : .secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Spacer()
+
+                        Button(action: { model.resetTo100() }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 8, weight: .bold))
+                                Text("Reset to 100%")
+                                    .font(.system(size: 9.5, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.red.opacity(0.35)))
+                            .overlay(Capsule().stroke(Color.red.opacity(0.7), lineWidth: 0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 9)
+                        .fill(Color.red.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .stroke(Color.red.opacity(0.45), lineWidth: 1)
+                        )
+                )
             }
 
             // ACTIVE AUDIO CHANNELS & STUDIO VU METERS (Direct Response to User Request)
@@ -952,10 +1065,8 @@ public struct MixerView: View {
     }
 
     private func boostColor(for val: Float) -> Color {
-        if val <= 1.0 { return .cyan }
-        if val <= 1.5 { return .green }
-        if val <= 2.0 { return .yellow }
-        return .orange
+        if val > 1.0 { return .red }
+        return .cyan
     }
 
     private func isCurrentPreset(_ val: Float) -> Bool {
@@ -964,33 +1075,34 @@ public struct MixerView: View {
 
     private func presetButton(value: Float, label: String, isBoost: Bool = false) -> some View {
         let active = isCurrentPreset(value)
+        let weight: Font.Weight = active ? .heavy : (isBoost ? .bold : .medium)
+
+        let fillColor: Color
+        let strokeColor: Color
+        let textColor: Color
+
+        if isBoost {
+            fillColor = active ? Color.red : Color.red.opacity(0.18)
+            strokeColor = active ? Color.red : Color.red.opacity(0.55)
+            textColor = active ? .white : Color.red
+        } else {
+            fillColor = active ? Color.cyan.opacity(0.85) : Color.white.opacity(0.07)
+            strokeColor = active ? Color.cyan : Color.white.opacity(0.1)
+            textColor = active ? .black : .white
+        }
+
         return Button(action: { model.setBoost(to: value) }) {
             Text(label)
-                .font(.system(size: 10, weight: active ? .bold : .medium))
+                .font(.system(size: 10, weight: weight))
                 .frame(maxWidth: .infinity)
                 .frame(height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            active ? (isBoost ? Color.orange : Color.cyan.opacity(0.85)) :
-                            (isBoost ? Color.orange.opacity(0.12) : Color.white.opacity(0.07))
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(
-                            active ? (isBoost ? Color.orange : Color.cyan) :
-                            (isBoost ? Color.orange.opacity(0.3) : Color.white.opacity(0.1)),
-                            lineWidth: 0.8
-                        )
-                )
-                .foregroundColor(
-                    active ? (isBoost ? .white : .black) :
-                    (isBoost ? .orange : .white)
-                )
+                .background(RoundedRectangle(cornerRadius: 6).fill(fillColor))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(strokeColor, lineWidth: isBoost ? 1.0 : 0.8))
+                .foregroundColor(textColor)
+                .shadow(color: (active && isBoost) ? Color.red.opacity(0.6) : .clear, radius: 4)
         }
         .buttonStyle(.plain)
-        .help("Set volume to \(label)")
+        .help("Set volume to \(label)\(isBoost ? " (Overdrive Red Zone)" : "")")
     }
 
     // MARK: - Footer

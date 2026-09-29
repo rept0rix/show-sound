@@ -75,6 +75,23 @@ public final class MixerModel: ObservableObject {
     @Published public var channel1DbString: String = "-12.4 dB"
     @Published public var channel2DbString: String = "-11.8 dB"
 
+    // SafeBoost Overdrive Timer (Auto-Reset protection to save battery and prevent speaker damage)
+    @Published public var boostTimerDurationMinutes: Int = 3 // Options: 3, 5, 10
+    @Published public var boostTimeRemainingSeconds: Int = 180
+    @Published public var isBoostTimerActive: Bool = false
+    private var boostCountdownTimer: Timer?
+
+    public var boostFormattedTime: String {
+        let m = boostTimeRemainingSeconds / 60
+        let s = boostTimeRemainingSeconds % 60
+        return String(format: "%02d:%02d", m, s)
+    }
+
+    public var boostProgress: Float {
+        let total = max(Float(boostTimerDurationMinutes * 60), 1.0)
+        return max(0.0, min(1.0, Float(boostTimeRemainingSeconds) / total))
+    }
+
     // References to specialized sub-managers
     public var appDetector: AppDetector { AppDetector.shared }
     public var deviceManager: AudioDeviceManager { AudioDeviceManager.shared }
@@ -140,14 +157,21 @@ public final class MixerModel: ObservableObject {
         if clamped <= 1.0 {
             // Within standard hardware range: directly set Mac hardware volume
             audioController.setHardwareVolume(clamped)
+            cancelBoostTimer()
         } else {
-            // Above 100%: keep physical hardware at 100%, digital headroom boosted by DSP limiter
+            // Above 100%: set physical hardware to maximum (100%)
             audioController.setHardwareVolume(1.0)
+            
+            // Start battery & speaker protection timer
+            if !isBoostTimerActive {
+                startBoostTimer()
+            }
         }
     }
 
     public func resetTo100() {
         setBoost(to: 1.0)
+        cancelBoostTimer()
     }
 
     public func stepVolume(delta: Float) {
@@ -164,6 +188,42 @@ public final class MixerModel: ObservableObject {
     public func toggleMasterMute() {
         let currentlyMuted = audioController.isMuted
         audioController.setMute(!currentlyMuted)
+    }
+
+    // MARK: - Overdrive Guard Timer (3m / 5m / 10m)
+    public func startBoostTimer(minutes: Int? = nil) {
+        if let m = minutes {
+            boostTimerDurationMinutes = m
+        }
+        boostTimeRemainingSeconds = boostTimerDurationMinutes * 60
+        isBoostTimerActive = true
+
+        boostCountdownTimer?.invalidate()
+        boostCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if self.masterBoost > 1.0 {
+                if self.boostTimeRemainingSeconds > 0 {
+                    self.boostTimeRemainingSeconds -= 1
+                } else {
+                    self.expireBoostTimer()
+                }
+            } else {
+                self.cancelBoostTimer()
+            }
+        }
+    }
+
+    public func cancelBoostTimer() {
+        boostCountdownTimer?.invalidate()
+        boostCountdownTimer = nil
+        isBoostTimerActive = false
+        boostTimeRemainingSeconds = boostTimerDurationMinutes * 60
+    }
+
+    private func expireBoostTimer() {
+        cancelBoostTimer()
+        resetTo100()
+        NSSound.beep()
     }
 
     private func startTelemetryLoop() {
