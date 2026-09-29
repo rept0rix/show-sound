@@ -81,8 +81,11 @@ public final class SystemAudioController: ObservableObject {
 
         if status == noErr {
             let clamped = max(0.0, min(1.0, Float(vol)))
-            DispatchQueue.main.async {
-                self.hardwareVolume = clamped
+            // Guard against momentary 0.0 read glitches if not muted
+            if clamped > 0.01 || self.isMuted {
+                DispatchQueue.main.async {
+                    self.hardwareVolume = clamped
+                }
             }
         } else {
             readVolumeAppleScript()
@@ -107,10 +110,15 @@ public final class SystemAudioController: ObservableObject {
     private func readVolumeAppleScript() {
         let script = "output volume of (get volume settings)"
         if let appleScript = NSAppleScript(source: script) {
-            let result = appleScript.executeAndReturnError(nil)
-            let val = Float(result.int32Value) / 100.0
-            DispatchQueue.main.async {
-                self.hardwareVolume = max(0.0, min(1.0, val))
+            var err: NSDictionary?
+            let result = appleScript.executeAndReturnError(&err)
+            if err == nil && result.descriptorType != 0 {
+                let val = Float(result.int32Value) / 100.0
+                if val > 0.01 || self.isMuted {
+                    DispatchQueue.main.async {
+                        self.hardwareVolume = max(0.0, min(1.0, val))
+                    }
+                }
             }
         }
     }
@@ -138,16 +146,6 @@ public final class SystemAudioController: ObservableObject {
                 mElement: kAudioObjectPropertyElementMain
             )
             _ = AudioObjectSetPropertyData(defaultOutputDeviceID, &mainAddr, 0, nil, size, &vol)
-
-            // Also set channels 1 and 2 for stereo hardware
-            for ch: UInt32 in [1, 2] {
-                var chAddr = AudioObjectPropertyAddress(
-                    mSelector: kAudioDevicePropertyVolumeScalar,
-                    mScope: kAudioDevicePropertyScopeOutput,
-                    mElement: ch
-                )
-                _ = AudioObjectSetPropertyData(defaultOutputDeviceID, &chAddr, 0, nil, size, &vol)
-            }
         }
 
         // 2. Debounced AppleScript (fires 50ms after slider movement for system UI sync)
@@ -156,7 +154,7 @@ public final class SystemAudioController: ObservableObject {
         let workItem = DispatchWorkItem { [weak self] in
             let script = "set volume output volume \(percent)"
             NSAppleScript(source: script)?.executeAndReturnError(nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 self?.isSettingLocally = false
             }
         }

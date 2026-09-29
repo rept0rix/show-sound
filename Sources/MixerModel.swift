@@ -106,6 +106,9 @@ public final class MixerModel: ObservableObject {
 
     private var telemetryTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    private var smoothedPeakL: Float = 0.0
+    private var smoothedPeakR: Float = 0.0
+    private var lastActiveAudioDate: Date = Date.distantPast
 
     public init() {
         // Read current system hardware volume
@@ -147,8 +150,11 @@ public final class MixerModel: ObservableObject {
             .sink { [weak self] hwVol in
                 guard let self = self else { return }
                 // Only sync if currently in normal volume range (<= 1.0) and notable difference
-                if self.masterBoost <= 1.05 && abs(self.masterBoost - hwVol) > 0.02 {
-                    self.masterBoost = hwVol
+                // Never allow a transient 0.0 reading to drop masterBoost unless explicitly muted
+                if hwVol > 0.01 || self.audioController.isMuted {
+                    if self.masterBoost <= 1.05 && abs(self.masterBoost - hwVol) > 0.02 {
+                        self.masterBoost = hwVol
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -232,7 +238,7 @@ public final class MixerModel: ObservableObject {
     }
 
     private func startTelemetryLoop() {
-        telemetryTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
+        telemetryTimer = Timer.scheduledTimer(withTimeInterval: 0.10, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             self.tickLiveMeters()
         }
@@ -240,20 +246,40 @@ public final class MixerModel: ObservableObject {
 
     private func tickLiveMeters() {
         let isMuted = audioController.isMuted || masterBoost <= 0.001
-        let hasSignal = !isMuted && (appDetector.anyAppPlaying || masterBoost > 0.05)
-        
-        let baseL: Float
-        let baseR: Float
-        if hasSignal {
-            baseL = Float.random(in: 0.35...0.70) * min(masterBoost, 1.2)
-            baseR = Float.random(in: 0.35...0.70) * min(masterBoost, 1.2)
-        } else {
-            baseL = 0.0
-            baseR = 0.0
+        let isAudioPlaying = appDetector.anyAppPlaying || (!isMuted && masterBoost > 0.05)
+
+        if isAudioPlaying && !isMuted {
+            lastActiveAudioDate = Date()
         }
 
-        var lSamples: [Float] = [baseL]
-        var rSamples: [Float] = [baseR]
+        // Grace period of 1.5 seconds so brief audio gaps don't crash the meter to 0
+        let hasSignal = !isMuted && Date().timeIntervalSince(lastActiveAudioDate) < 1.5
+
+        if hasSignal {
+            let nominal = min(1.0, max(0.35, masterBoost * 0.65))
+            let organicL = nominal * Float.random(in: 0.88...1.12)
+            let organicR = nominal * Float.random(in: 0.88...1.12)
+
+            // Analog Ballistic smoothing: fast attack, smooth decay
+            if organicL > smoothedPeakL {
+                smoothedPeakL = smoothedPeakL * 0.35 + organicL * 0.65
+            } else {
+                smoothedPeakL = smoothedPeakL * 0.88 + organicL * 0.12
+            }
+
+            if organicR > smoothedPeakR {
+                smoothedPeakR = smoothedPeakR * 0.35 + organicR * 0.65
+            } else {
+                smoothedPeakR = smoothedPeakR * 0.88 + organicR * 0.12
+            }
+        } else {
+            // Gentle fade out down to 0, never a harsh jump!
+            smoothedPeakL = max(0.0, smoothedPeakL * 0.75 - 0.015)
+            smoothedPeakR = max(0.0, smoothedPeakR * 0.75 - 0.015)
+        }
+
+        var lSamples: [Float] = [smoothedPeakL]
+        var rSamples: [Float] = [smoothedPeakR]
 
         lSamples.withUnsafeMutableBufferPointer { lPtr in
             rSamples.withUnsafeMutableBufferPointer { rPtr in
@@ -275,14 +301,15 @@ public final class MixerModel: ObservableObject {
                 )
 
                 DispatchQueue.main.async {
-                    let curL = hasSignal ? telem.peakLeft : 0.0
-                    let curR = hasSignal ? telem.peakRight : 0.0
+                    let curL = self.smoothedPeakL
+                    let curR = self.smoothedPeakR
+                    let active = curL > 0.02 || curR > 0.02
 
                     self.peakLeft = curL
                     self.peakRight = curR
                     self.safetyState = telem.safetyState
                     self.gainReductionDb = telem.gainReductionDb
-                    self.isChannelActive = hasSignal && (curL > 0.04 || curR > 0.04)
+                    self.isChannelActive = active
                     self.isClippingLeft = curL >= 0.94
                     self.isClippingRight = curR >= 0.94
 
@@ -290,33 +317,33 @@ public final class MixerModel: ObservableObject {
                     if curL >= self.peakHoldLeft {
                         self.peakHoldLeft = curL
                     } else {
-                        self.peakHoldLeft = max(0.0, self.peakHoldLeft - 0.03)
+                        self.peakHoldLeft = max(0.0, self.peakHoldLeft - 0.025)
                     }
 
                     if curR >= self.peakHoldRight {
                         self.peakHoldRight = curR
                     } else {
-                        self.peakHoldRight = max(0.0, self.peakHoldRight - 0.03)
+                        self.peakHoldRight = max(0.0, self.peakHoldRight - 0.025)
                     }
 
                     // Dynamic 16-Band Frequency Spectrum calculation
-                    if self.isChannelActive {
+                    if active {
                         let avgSig = (curL + curR) * 0.5
                         var nextBands: [Float] = []
                         for i in 0..<16 {
                             let normalizedFreq = Float(i) / 15.0
                             let curve = sin(normalizedFreq * .pi)
-                            let randFluctuation = Float.random(in: 0.65...1.35)
+                            let randFluctuation = Float.random(in: 0.85...1.15)
                             let bandTarget = min(1.0, max(0.08, avgSig * (0.6 + 0.5 * curve) * randFluctuation))
                             let oldVal = self.spectrumLevels.indices.contains(i) ? self.spectrumLevels[i] : 0.08
-                            nextBands.append(oldVal * 0.40 + bandTarget * 0.60)
+                            nextBands.append(oldVal * 0.50 + bandTarget * 0.50)
                         }
                         self.spectrumLevels = nextBands
                     } else {
-                        self.spectrumLevels = self.spectrumLevels.map { max(0.04, $0 * 0.75) }
+                        self.spectrumLevels = self.spectrumLevels.map { max(0.04, $0 * 0.80) }
                     }
 
-                    if self.isChannelActive {
+                    if active {
                         let lDb = 20.0 * log10(max(curL, 0.001))
                         let rDb = 20.0 * log10(max(curR, 0.001))
                         self.channel1Db = lDb

@@ -12,7 +12,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
     public static func main() {
         let app = NSApplication.shared
-        app.setActivationPolicy(.regular)
+        app.setActivationPolicy(.accessory)
         app.delegate = shared
         app.run()
     }
@@ -24,19 +24,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         AppUpdate.restoreBadge()
         AppUpdate.checkOnLaunch()
 
-        // Open the main mixer window on launch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.showMixerWindow()
-        }
+        // Clean background launch in Menu Bar — no unsolicited popup window
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showMixerWindow()
+        togglePopover(nil)
         return true
     }
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(handleStatusItemClick(_:))
@@ -47,20 +44,40 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
     public func updateMenuBarButton() {
         guard let button = statusItem?.button else { return }
+        let ready = availableUpdateVersion != nil
+        button.image = menuBarIcon(updateReady: ready)
+        let boost = Int(MixerModel.shared.masterBoost * 100)
+        button.toolTip = availableUpdateVersion.map { "Show Sound — Update \($0) is ready" } ?? "Show Sound (SafeBoost: \(boost)%)"
+    }
+
+    private func menuBarIcon(updateReady: Bool) -> NSImage? {
+        let side: CGFloat = 18
+        if let source = NSApp.applicationIconImage.copy() as? NSImage, source.isValid {
+            source.size = NSSize(width: side, height: side)
+            source.isTemplate = false
+            if !updateReady {
+                return source
+            }
+            let canvas = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+                source.draw(in: NSRect(x: 0, y: 0, width: side - 2, height: side - 2))
+                let ring = NSRect(x: side - 8, y: side - 8, width: 8, height: 8)
+                NSColor.white.setFill()
+                NSBezierPath(ovalIn: ring).fill()
+                NSColor.systemBlue.setFill()
+                NSBezierPath(ovalIn: ring.insetBy(dx: 1.0, dy: 1.0)).fill()
+                return true
+            }
+            canvas.isTemplate = false
+            return canvas
+        }
 
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .bold)
         let symbolName = "speaker.wave.3.fill"
         if let sfImage = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Show Sound")?.withSymbolConfiguration(config) {
             sfImage.isTemplate = true
-            button.image = sfImage
-            button.imagePosition = .imageLeft
-        } else {
-            button.title = "🔊"
+            return sfImage
         }
-
-        let boost = Int(MixerModel.shared.masterBoost * 100)
-        button.title = (boost > 100) ? " \(boost)%" : ""
-        button.toolTip = availableUpdateVersion.map { "Show Sound — Update \($0) is ready" } ?? "Show Sound (SafeBoost: \(boost)%)"
+        return nil
     }
 
     public func noteUpdate(_ version: String?) {
@@ -88,7 +105,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
         let host = NSHostingView(rootView: MixerView())
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 650),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 680),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -108,13 +125,25 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private func setupPopover() {
         popover = NSPopover()
         popover.appearance = NSAppearance(named: .vibrantDark)
-        popover.contentSize = NSSize(width: 420, height: 650)
+        popover.contentSize = NSSize(width: 440, height: 680)
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(rootView: MixerView())
     }
 
     @objc private func handleStatusItemClick(_ sender: AnyObject?) {
+        guard let event = NSApp.currentEvent else {
+            togglePopover(sender)
+            return
+        }
+        if event.type == .rightMouseUp {
+            showContextMenu()
+        } else {
+            togglePopover(sender)
+        }
+    }
+
+    public func togglePopover(_ sender: AnyObject?) {
         if popover.isShown {
             closePopover(sender)
         } else {
@@ -136,6 +165,37 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     public func closePopover(_ sender: AnyObject?) {
         popover.performClose(sender)
         removeEventMonitor()
+    }
+
+    private func showContextMenu() {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Show Sound", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Open Mixer", action: #selector(toggleFromMenu), keyEquivalent: "m"))
+        menu.addItem(NSMenuItem(title: MixerModel.shared.audioController.isMuted ? "Unmute Master" : "Mute Master", action: #selector(toggleMuteFromMenu), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Check for Updates…", action: #selector(checkUpdatesFromMenu), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit Show Sound", action: #selector(quitFromMenu), keyEquivalent: "q"))
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func toggleFromMenu() {
+        showPopover()
+    }
+
+    @objc private func toggleMuteFromMenu() {
+        MixerModel.shared.toggleMasterMute()
+    }
+
+    @objc private func checkUpdatesFromMenu() {
+        AppUpdate.checkManually()
+    }
+
+    @objc private func quitFromMenu() {
+        NSApp.terminate(nil)
     }
 
     private func installEventMonitor() {

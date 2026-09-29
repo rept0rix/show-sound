@@ -1,6 +1,9 @@
 import Foundation
 import AppKit
 import Combine
+import Darwin
+import IOKit
+import IOKit.pwr_mgt
 
 public struct DiscoveredAudioApp: Identifiable, Equatable {
     public let id: String // bundleIdentifier or process name
@@ -87,6 +90,76 @@ public final class AppDetector: ObservableObject {
     private var meterTimer: Timer?
     private let queryQueue = DispatchQueue(label: "com.showsound.appmonitor", qos: .userInitiated)
     
+    // MARK: - Native IOKit Audio Output Inspection
+    public struct ActiveAudioProcess {
+        public let pid: pid_t
+        public let name: String
+        public let bundleID: String?
+        public let app: NSRunningApplication?
+    }
+
+    private func getParentPID(pid: pid_t) -> pid_t? {
+        var info = proc_bsdinfo()
+        let size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
+        if size > 0 {
+            return pid_t(info.pbi_ppid)
+        }
+        return nil
+    }
+
+    private func findActiveAudioProcesses() -> [ActiveAudioProcess] {
+        var assertionsByProcess: Unmanaged<CFDictionary>?
+        let res = IOPMCopyAssertionsByProcess(&assertionsByProcess)
+        guard res == kIOReturnSuccess, let dict = assertionsByProcess?.takeRetainedValue() as? [NSNumber: [[String: Any]]] else {
+            return []
+        }
+
+        var activePIDs = Set<pid_t>()
+        for (pidNum, assertions) in dict {
+            let pid = pid_t(pidNum.int32Value)
+            for a in assertions {
+                let name = a["AssertName"] as? String ?? ""
+                if name.localizedCaseInsensitiveContains("playing audio") {
+                    activePIDs.insert(pid)
+                } else if let onBehalf = a["AssertionOnBehalfOfPID"] as? NSNumber {
+                    let targetPID = pid_t(onBehalf.int32Value)
+                    activePIDs.insert(targetPID)
+                }
+            }
+        }
+
+        var results: [ActiveAudioProcess] = []
+        var seenBundleIDs = Set<String>()
+        let myPID = ProcessInfo.processInfo.processIdentifier
+
+        for pid in activePIDs {
+            if pid == myPID { continue }
+            var app = NSRunningApplication(processIdentifier: pid)
+            if app == nil || app?.activationPolicy != .regular {
+                if let ppid = getParentPID(pid: pid) {
+                    if ppid != myPID {
+                        app = NSRunningApplication(processIdentifier: ppid)
+                    }
+                }
+            }
+
+            guard let resolvedApp = app, resolvedApp.activationPolicy == .regular else { continue }
+            let resolvedName = resolvedApp.localizedName ?? "Audio PID \(pid)"
+            guard let bid = resolvedApp.bundleIdentifier else { continue }
+
+            if seenBundleIDs.contains(bid) { continue }
+            seenBundleIDs.insert(bid)
+
+            let lowerName = resolvedName.lowercased()
+            if lowerName.contains("show sound") || lowerName.contains("showsound") { continue }
+            if lowerName.contains("windowserver") || lowerName.contains("corespeechd") { continue }
+
+            results.append(ActiveAudioProcess(pid: pid, name: resolvedName, bundleID: bid, app: resolvedApp))
+        }
+
+        return results
+    }
+
     public init() {
         refreshRunningApps()
         setupWorkspaceObservers()
@@ -107,11 +180,44 @@ public final class AppDetector: ObservableObject {
         let myBundleID = Bundle.main.bundleIdentifier ?? "com.showsound.app"
         let currentDevName = AudioDeviceManager.shared.currentDeviceName
         
+        // 1. Detect any active audio producing processes via IOKit assertions
+        let activeProcs = findActiveAudioProcesses()
+        for act in activeProcs {
+            if let bid = act.bundleID {
+                let saved = appPreferences[bid]
+                let vol = saved?.volume ?? 1.0
+                let pan = saved?.pan ?? 0.0
+                let muted = saved?.isMuted ?? false
+                let call = saved?.isSharedToCall ?? false
+                let prev = apps.first(where: { $0.id == bid })
+                let dest = call ? "Call Mic + Output" : currentDevName
+
+                detected.append(
+                    DiscoveredAudioApp(
+                        id: bid,
+                        name: act.name,
+                        icon: act.app?.icon,
+                        volume: vol,
+                        pan: pan,
+                        isMuted: muted,
+                        isSharedToCall: call,
+                        isRunning: true,
+                        isPlaying: true,
+                        detailText: prev?.detailText ?? "♫ Active Audio Stream",
+                        outputDestination: dest,
+                        activityLevelL: prev?.activityLevelL ?? 0.65,
+                        activityLevelR: prev?.activityLevelR ?? 0.65
+                    )
+                )
+            }
+        }
+
+        // 2. Add other running media apps
         for app in runningApps where app.activationPolicy == .regular {
-            // Strictly exclude Show Sound itself
             if app.processIdentifier == myPID { continue }
             guard let bundleID = app.bundleIdentifier else { continue }
             if bundleID == myBundleID || bundleID == "com.showsound.app" { continue }
+            if detected.contains(where: { $0.id == bundleID }) { continue }
             
             let name = app.localizedName ?? bundleID
             let lowerBid = bundleID.lowercased()
@@ -132,11 +238,13 @@ public final class AppDetector: ObservableObject {
                 || lowerBid.contains("player")
                 || lowerBid.contains("browser")
                 || lowerBid.contains("chrome")
+                || lowerBid.contains("comet")
                 || lowerBid.contains("call")
                 || lowerBid.contains("chat")
                 || lowerName.contains("spotify")
                 || lowerName.contains("chrome")
                 || lowerName.contains("safari")
+                || lowerName.contains("comet")
                 || lowerName.contains("whatsapp")
                 || lowerName.contains("zoom")
                 || lowerName.contains("slack")
@@ -321,67 +429,138 @@ public final class AppDetector: ObservableObject {
                 }
             }
             
+            let activeProcs = self.findActiveAudioProcesses()
+            let activeBIDs = Set(activeProcs.compactMap { $0.bundleID })
+            let activeNames = Set(activeProcs.map { $0.name.lowercased() })
+
             DispatchQueue.main.async {
                 var anyActive = false
                 var activeTitle = "Stereo Output"
+                // 1. Immediately insert any active process that is not yet in self.apps
+                for act in activeProcs {
+                    guard let bid = act.bundleID else { continue }
+                    if !self.apps.contains(where: { $0.id == bid }) {
+                        let saved = self.appPreferences[bid]
+                        let vol = saved?.volume ?? 1.0
+                        let pan = saved?.pan ?? 0.0
+                        let muted = saved?.isMuted ?? false
+                        let call = saved?.isSharedToCall ?? false
+                        let newApp = DiscoveredAudioApp(
+                            id: bid,
+                            name: act.name,
+                            icon: act.app?.icon,
+                            volume: vol,
+                            pan: pan,
+                            isMuted: muted,
+                            isSharedToCall: call,
+                            isRunning: true,
+                            isPlaying: true,
+                            detailText: "♫ Active Audio Stream",
+                            outputDestination: call ? "Call Mic + Output" : currentDevName,
+                            activityLevelL: 0.70,
+                            activityLevelR: 0.70
+                        )
+                        self.apps.insert(newApp, at: 0)
+                    }
+                }
                 
                 for i in 0..<self.apps.count {
                     let bid = self.apps[i].id
                     let isCallShared = self.apps[i].isSharedToCall
                     self.apps[i].outputDestination = isCallShared ? "Call Mic + Output" : currentDevName
+                    let isHardwareAudioActive = activeBIDs.contains(bid) || activeNames.contains(self.apps[i].name.lowercased())
                     
                     if bid == "com.spotify.client" {
-                        self.apps[i].isPlaying = spotifyPlaying
+                        self.apps[i].isPlaying = spotifyPlaying || isHardwareAudioActive
                         if let track = spotifyTrack {
                             self.apps[i].detailText = "♫ \(track)"
                         } else {
-                            self.apps[i].detailText = spotifyPlaying ? "♫ Playing Music" : "Paused"
+                            self.apps[i].detailText = self.apps[i].isPlaying ? "♫ Playing Music" : "Paused"
                         }
-                        if spotifyPlaying {
+                        if self.apps[i].isPlaying {
                             anyActive = true
                             activeTitle = spotifyTrack.map { "Spotify: \($0)" } ?? "Spotify Music"
                         }
                     } else if bid == "com.google.Chrome" {
                         if let tab = chromeTab, !tab.isEmpty {
                             self.apps[i].detailText = "🌐 Tab: \(tab)"
-                            // If tab contains media keywords, flag as potentially active
                             let lowerTab = tab.lowercased()
                             let isMediaTab = lowerTab.contains("youtube") || lowerTab.contains("spotify") || lowerTab.contains("soundcloud") || lowerTab.contains("meet") || lowerTab.contains("zoom") || lowerTab.contains("netflix") || lowerTab.contains("music") || lowerTab.contains("video")
-                            if isMediaTab {
+                            if isMediaTab || isHardwareAudioActive {
                                 self.apps[i].isPlaying = true
                                 anyActive = true
+                                activeTitle = "Chrome • \(tab)"
                             }
                         } else {
-                            self.apps[i].detailText = "Web Audio"
+                            self.apps[i].isPlaying = isHardwareAudioActive
+                            if isHardwareAudioActive {
+                                self.apps[i].detailText = "🌐 Web Audio Stream"
+                                anyActive = true
+                                activeTitle = "Chrome • Active Audio"
+                            } else {
+                                self.apps[i].detailText = "Web Audio"
+                            }
                         }
                     } else if bid == "com.apple.Music" {
-                        self.apps[i].isPlaying = musicPlaying
+                        self.apps[i].isPlaying = musicPlaying || isHardwareAudioActive
                         if let track = musicTrack {
                             self.apps[i].detailText = "♫ \(track)"
                         } else {
-                            self.apps[i].detailText = musicPlaying ? "♫ Playing Music" : "Paused"
+                            self.apps[i].detailText = self.apps[i].isPlaying ? "♫ Playing Music" : "Paused"
                         }
-                        if musicPlaying {
+                        if self.apps[i].isPlaying {
                             anyActive = true
                             activeTitle = musicTrack.map { "Music: \($0)" } ?? "Apple Music"
                         }
                     } else if bid == "com.apple.Safari" {
+                        self.apps[i].isPlaying = isHardwareAudioActive
                         if let tab = safariTab, !tab.isEmpty {
                             self.apps[i].detailText = "🌐 Tab: \(tab)"
+                            if isHardwareAudioActive {
+                                anyActive = true
+                                activeTitle = "Safari • \(tab)"
+                            }
                         } else {
-                            self.apps[i].detailText = "Web Audio"
+                            self.apps[i].detailText = isHardwareAudioActive ? "🌐 Web Audio Stream" : "Web Audio"
+                            if isHardwareAudioActive {
+                                anyActive = true
+                                activeTitle = "Safari • Active Audio"
+                            }
                         }
                     } else if bid == "company.thebrowser.Browser" {
+                        self.apps[i].isPlaying = isHardwareAudioActive
                         if let tab = arcTab, !tab.isEmpty {
                             self.apps[i].detailText = "🌐 Tab: \(tab)"
+                            if isHardwareAudioActive {
+                                anyActive = true
+                                activeTitle = "Arc • \(tab)"
+                            }
+                        } else if isHardwareAudioActive {
+                            self.apps[i].detailText = "🌐 Web Audio Stream"
+                            anyActive = true
+                            activeTitle = "Arc • Active Audio"
                         }
-                    } else if bid == "net.whatsapp.WhatsApp" {
-                        self.apps[i].detailText = "💬 Voice Calls & Audio"
-                    } else if bid == "ru.keepcoder.Telegram" {
-                        self.apps[i].detailText = "💬 Voice & Media Channels"
-                    } else if bid == "us.zoom.xos" {
-                        self.apps[i].detailText = "📞 Conference Audio"
+                    } else {
+                        // General audio app (Comet, VLC, Zoom, Telegram, WhatsApp, etc.)
+                        if isHardwareAudioActive {
+                            self.apps[i].isPlaying = true
+                            anyActive = true
+                            if self.apps[i].detailText == nil || self.apps[i].detailText?.isEmpty == true {
+                                self.apps[i].detailText = "♫ Active Audio Stream"
+                            }
+                            if activeTitle == "Stereo Output" {
+                                activeTitle = "\(self.apps[i].name) • Playing Audio"
+                            }
+                        } else {
+                            self.apps[i].isPlaying = false
+                        }
                     }
+                }
+                
+                // Keep playing apps at the very top
+                self.apps.sort { a, b in
+                    if a.isPlaying != b.isPlaying { return a.isPlaying && !b.isPlaying }
+                    return a.name < b.name
                 }
                 
                 self.anyAppPlaying = anyActive
