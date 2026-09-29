@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Show Sound — Safe Volume Boost & Per-App Audio Engine for Mac</title>
+  <meta name="description" content="Show Sound amplifies Mac audio beyond 100% while strictly protecting speakers and hearing. Mix apps independently, pan stereo, and stream music directly into calls without voice cutoff.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-icon">🔊</div>
+        <span class="brand-name">Show Sound</span>
+        <span class="badge">v1.0.0</span>
+      </div>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#demo">Live Demo</a>
+        <a href="#safety">GainGuard DSP</a>
+        <a href="https://github.com/rept0rix/show-bar" target="_blank" class="nav-sibling">Show Bar ↗</a>
+        <a href="https://github.com/rept0rix/show-sound/releases/latest" class="btn btn-sm btn-primary">Download DMG</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="hero-container">
+      <div class="hero-pill">
+        <span class="pill-dot"></span> GainGuard™ Hardware Protection Active
+      </div>
+      <h1 class="hero-title">
+        The Volume Booster<br>
+        <span class="gradient-text">That Won't Blow Your Speakers.</span>
+      </h1>
+      <p class="hero-subtitle">
+        Standard boosters clip and destroy MacBook transducers. <strong>Show Sound</strong> uses studio-grade lookahead limiters, dynamic compression, per-app mixing, and call music injection — right from your menu bar.
+      </p>
+
+      <div class="hero-actions">
+        <a href="https://github.com/rept0rix/show-sound/releases/download/v1.0.0/Show-Sound-1.0.0.dmg" class="btn btn-lg btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for Mac
+        </a>
+        <a href="#demo" class="btn btn-lg btn-secondary">Try Live Audio Demo</a>
+      </div>
+      <p class="hero-meta">Requires macOS 14.0+ · Optimized for Apple Silicon (M1/M2/M3/M4)</p>
+    </div>
+  </header>
+
+  <!-- Interactive Demo Section -->
+  <section id="demo" class="section demo-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Experience GainGuard™ In Action</h2>
+        <p>Test the interactive DSP simulator below. Drag the boost slider up to 600% — notice how the True-Peak Limiter eliminates harsh square-wave clipping.</p>
+      </div>
+
+      <div class="mixer-card">
+        <div class="mixer-header">
+          <div class="mixer-brand">
+            <span class="mixer-indicator green"></span>
+            <strong>Show Sound Master Controller</strong>
+          </div>
+          <span class="safety-tag" id="safetyTag">GUARD: SAFE</span>
+        </div>
+
+        <div class="boost-control">
+          <div class="boost-labels">
+            <span>SafeBoost Amplification</span>
+            <span class="boost-value" id="boostVal">100%</span>
+          </div>
+          <input type="range" id="boostSlider" min="100" max="600" value="100" class="slider">
+          <div class="slider-ticks">
+            <span>100% Normal</span>
+            <span>250% Boost</span>
+            <span>450% Heavy</span>
+            <span>600% Max</span>
+          </div>
+        </div>
+
+        <!-- VU Meter -->
+        <div class="vu-container">
+          <div class="vu-row">
+            <span class="vu-label">L</span>
+            <div class="vu-track"><div class="vu-bar" id="vuL"></div></div>
+          </div>
+          <div class="vu-row">
+            <span class="vu-label">R</span>
+            <div class="vu-track"><div class="vu-bar" id="vuR"></div></div>
+          </div>
+        </div>
+
+        <!-- Features toggles -->
+        <div class="mixer-toggles">
+          <label class="toggle-item">
+            <input type="checkbox" id="hpfToggle" checked>
+            <span>55Hz Transducer Protection (Sub-Bass Roll-Off)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="callToggle" checked>
+            <span>Music Injection to Call + Auto-Ducking (-18dB)</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Core Features Grid -->
+  <section id="features" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Four Breakthrough Capabilities</h2>
+        <p>Built for creators, remote workers, and audio enthusiasts on macOS.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Zero-Distortion SafeBoost</h3>
+          <p>Amplifies whisper-quiet videos and podcasts up to 600%. A strict true-peak lookahead limiter caps audio at -0.3 dBFS, completely eliminating voice coil burnout.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎚️</div>
+          <h3>Per-App Volume Mixer</h3>
+          <p>Independently control Spotify, YouTube, WhatsApp, and Zoom. Keep background music low while elevating meeting voices, with saved profiles.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎧</div>
+          <h3>Stereo Spatial Panning</h3>
+          <p>Direct your WhatsApp call to your left ear and Spotify playlist to your right ear. Enjoy crystal clear separation without audio clutter.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎙️</div>
+          <h3>Call Music Streamer</h3>
+          <p>Play music to friends in calls without your voice cutting out. Pure digital injection directly into your mic stream, with automatic voice-ducking.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Safety Science Section -->
+  <section id="safety" class="section safety-section">
+    <div class="container">
+      <div class="safety-grid">
+        <div class="safety-content">
+          <h2>The Science Behind GainGuard™</h2>
+          <p>Traditional booster extensions simply multiply the PCM numbers. When audio reaches the digital ceiling (0 dBFS), peaks get chopped into flat square waves. This generates DC heat that cooks speaker voice coils.</p>
+          <ul class="safety-points">
+            <li><strong>55Hz High-Pass Filter:</strong> Cuts off physical sub-bass rumble that miniature laptop speakers cannot reproduce.</li>
+            <li><strong>Dynamic Range Compression:</strong> Lifts soft details and dialogue by up to 24dB without raising peak ceiling.</li>
+            <li><strong>Hyperbolic Knee Limiter:</strong> Smooth continuous saturation replacing harsh digital distortion.</li>
+          </ul>
+        </div>
+        <div class="safety-visual">
+          <div class="waveform-box">
+            <div class="wave-comparison">
+              <div class="wave-col bad">
+                <h4>Normal Booster</h4>
+                <div class="clipped-wave"></div>
+                <span class="tag tag-red">Dangerous Square Clipping</span>
+              </div>
+              <div class="wave-col good">
+                <h4>Show Sound</h4>
+                <div class="smooth-wave"></div>
+                <span class="tag tag-green">GainGuard™ Soft Knee</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <p>© 2026 Naor Yanko · Show Sound & Show Bar Product Suite</p>
+      <div class="footer-links">
+        <a href="https://github.com/rept0rix/show-sound">GitHub</a>
+        <a href="https://github.com/rept0rix/show-bar">Show Bar</a>
+        <a href="mailto:na0ryank0@gmail.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const slider = document.getElementById('boostSlider');
+    const boostVal = document.getElementById('boostVal');
+    const safetyTag = document.getElementById('safetyTag');
+    const vuL = document.getElementById('vuL');
+    const vuR = document.getElementById('vuR');
+
+    slider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      boostVal.textContent = val + '%';
+
+      if (val <= 200) {
+        safetyTag.textContent = 'GUARD: SAFE';
+        safetyTag.className = 'safety-tag safe';
+      } else if (val <= 400) {
+        safetyTag.textContent = 'GUARD: COMPRESSING';
+        safetyTag.className = 'safety-tag compressing';
+      } else {
+        safetyTag.textContent = 'GUARD: LIMITER ACTIVE';
+        safetyTag.className = 'safety-tag limiting';
+      }
+    });
+
+    // Simulate animated VU bars
+    setInterval(() => {
+      const boost = parseInt(slider.value) / 100;
+      const base = 0.35 + Math.random() * 0.3;
+      const limitedL = Math.min(base * Math.sqrt(boost), 0.95);
+      const limitedR = Math.min((base + (Math.random() * 0.1 - 0.05)) * Math.sqrt(boost), 0.95);
+
+      vuL.style.width = (limitedL * 100) + '%';
+      vuR.style.width = (limitedR * 100) + '%';
+    }, 100);
+  </script>
+</body>
+</html>
