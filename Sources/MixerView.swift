@@ -25,7 +25,7 @@ public struct MixerView: View {
                 .padding(.bottom, 12)
 
             Divider()
-                .background(Color.white.opacity(0.1))
+                .background(Color.white.opacity(0.12))
 
             // Main Content Area
             ScrollView(.vertical, showsIndicators: false) {
@@ -47,22 +47,26 @@ public struct MixerView: View {
                 }
                 .padding(16)
             }
-            .frame(maxHeight: 520)
+            .frame(maxHeight: 540)
 
             Divider()
-                .background(Color.white.opacity(0.1))
+                .background(Color.white.opacity(0.12))
 
             // Footer Bar
             footerSection
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
         }
-        .frame(width: 390)
+        .frame(width: 410)
         .background(
             ZStack {
-                Color(nsColor: .windowBackgroundColor)
+                Color(red: 0.07, green: 0.08, blue: 0.11)
                 LinearGradient(
-                    colors: [Color.cyan.opacity(0.04), Color.blue.opacity(0.06), Color.clear],
+                    colors: [
+                        Color.cyan.opacity(0.08),
+                        Color.blue.opacity(0.04),
+                        Color.black.opacity(0.85)
+                    ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -72,81 +76,107 @@ public struct MixerView: View {
 
     // MARK: - Header
     private var headerSection: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 10) {
+            // Brand Icon
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 9)
                     .fill(
                         LinearGradient(
-                            colors: [Color.cyan, Color.blue],
+                            colors: [Color.cyan, Color.blue.opacity(0.9)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 30, height: 30)
+                    .frame(width: 32, height: 32)
+                    .shadow(color: Color.cyan.opacity(0.35), radius: 6, x: 0, y: 2)
 
                 Image(systemName: "speaker.wave.3.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 14, weight: .black))
                     .foregroundColor(.white)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text("Show Sound")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
                     Text(ShowSoundSupport.version)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
                         .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.white.opacity(0.1)))
+                        .padding(.vertical, 1.5)
+                        .background(Capsule().fill(Color.white.opacity(0.12)))
                 }
-                Text("Safe Volume & Per-App Audio Engine")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                
+                // Active Output Device name
+                HStack(spacing: 4) {
+                    Image(systemName: deviceManager.isCurrentSpeaker ? "speaker.wave.2" : "airpodspro")
+                        .font(.system(size: 9))
+                        .foregroundColor(.cyan)
+                    Text(deviceManager.currentDeviceName)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
 
-            // Hardware Guard Status Pill
+            // GainGuard Hardware Protection Pill
             HStack(spacing: 4) {
                 Image(systemName: model.speakerProtection ? "shield.checkmark.fill" : "shield.slash")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundColor(model.speakerProtection ? .green : .yellow)
-                Text(model.speakerProtection ? "GainGuard Active" : "Unprotected")
-                    .font(.system(size: 10, weight: .medium))
+                Text(model.speakerProtection ? "GainGuard" : "Unprotected")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(model.speakerProtection ? .white : .yellow)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Capsule().fill(Color.white.opacity(0.08)))
+            .background(
+                Capsule()
+                    .fill(model.speakerProtection ? Color.green.opacity(0.15) : Color.yellow.opacity(0.15))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(model.speakerProtection ? Color.green.opacity(0.3) : Color.yellow.opacity(0.3), lineWidth: 0.8)
+            )
         }
     }
 
     // MARK: - Navigation Tabs
     private var navigationTabs: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             tabButton(title: "Mixer", icon: "slider.vertical.3", index: 0)
             tabButton(title: "10-Band EQ", icon: "waveform", index: 1)
             tabButton(title: "Devices & Calls", icon: "airpodsmax", index: 2)
         }
         .padding(3)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                )
+        )
     }
 
     private func tabButton(title: String, icon: String, index: Int) -> some View {
-        Button(action: { selectedTab = index }) {
-            HStack(spacing: 5) {
+        Button(action: { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = index } }) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 10, weight: selectedTab == index ? .bold : .medium))
                 Text(title)
                     .font(.system(size: 11, weight: selectedTab == index ? .bold : .medium))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(selectedTab == index ? Color.white.opacity(0.15) : Color.clear)
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(selectedTab == index ? Color.white.opacity(0.18) : Color.clear)
             )
-            .foregroundColor(selectedTab == index ? .primary : .secondary)
+            .foregroundColor(selectedTab == index ? .white : .secondary)
         }
         .buttonStyle(.plain)
     }
@@ -154,18 +184,65 @@ public struct MixerView: View {
     // MARK: - Tab 1: Master SafeBoost Card
     private var masterBoostCard: some View {
         VStack(spacing: 12) {
+            // Card Title & Channel Status Banner
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Master SafeBoost")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.primary)
-                    Text("Direct macOS hardware volume & dynamic limiter")
+                    HStack(spacing: 6) {
+                        Text("Master SafeBoost")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        // Active Channel Status Badge
+                        if model.isChannelActive {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                                    .shadow(color: .green, radius: 4)
+                                Text("CH 1 & 2 ACTIVE")
+                                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                                    .foregroundColor(.green)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.green.opacity(0.15)))
+                            .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 0.8))
+                        } else if model.audioController.isMuted {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 6, height: 6)
+                                Text("MUTED")
+                                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                                    .foregroundColor(.red)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.red.opacity(0.15)))
+                            .overlay(Capsule().stroke(Color.red.opacity(0.4), lineWidth: 0.8))
+                        } else {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.secondary)
+                                    .frame(width: 5, height: 5)
+                                Text("STEREO READY")
+                                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.white.opacity(0.06)))
+                        }
+                    }
+
+                    Text("Direct macOS hardware volume & dynamic peak limiter")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
+
                 Spacer()
 
-                // Quick Reset Pill & Percentage Readout
+                // Quick Reset Pill + Big Percentage Readout
                 HStack(spacing: 6) {
                     if abs(model.masterBoost - 1.0) > 0.02 {
                         Button(action: { model.resetTo100() }) {
@@ -175,13 +252,14 @@ public struct MixerView: View {
                                 Text("Reset")
                                     .font(.system(size: 10, weight: .bold))
                             }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3.5)
+                            .background(Capsule().fill(Color.cyan.opacity(0.2)))
+                            .overlay(Capsule().stroke(Color.cyan.opacity(0.5), lineWidth: 1))
                             .foregroundColor(.cyan)
                         }
                         .buttonStyle(.plain)
-                        .help("Reset volume to standard 100%")
+                        .help("Reset volume to standard 100% (0 dBFS unity)")
                     }
 
                     Text("\(Int(round(model.masterBoost * 100)))%")
@@ -190,22 +268,22 @@ public struct MixerView: View {
                 }
             }
 
-            // Big Slider
+            // Big Volume Slider (0.0 to 3.0)
             Slider(value: Binding(
                 get: { model.masterBoost },
                 set: { model.setBoost(to: $0) }
             ), in: 0.0...3.0, step: 0.01)
             .accentColor(boostColor(for: model.masterBoost))
 
-            // Quick Volume Presets & Stepper Buttons Row:
-            // [-] 30% 50% 70% [100% Reset] 120% 150% 200% [+]
+            // Quick Volume Presets & Steppers Row: [-] 30% 50% 70% [100% ↺] 120% 150% 200% [+]
             HStack(spacing: 4) {
                 // Stepper [-]
                 Button(action: { model.stepVolume(delta: -0.10) }) {
                     Image(systemName: "minus")
                         .font(.system(size: 10, weight: .bold))
-                        .frame(width: 26, height: 26)
+                        .frame(width: 28, height: 26)
                         .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.12), lineWidth: 0.8))
                         .foregroundColor(.primary)
                 }
                 .buttonStyle(.plain)
@@ -213,18 +291,16 @@ public struct MixerView: View {
 
                 // 30%
                 presetButton(value: 0.30, label: "30%")
-
                 // 50%
                 presetButton(value: 0.50, label: "50%")
-
                 // 70%
                 presetButton(value: 0.70, label: "70%")
 
-                // 100% Reset Button
+                // 100% Primary Anchor Button
                 Button(action: { model.resetTo100() }) {
                     HStack(spacing: 2) {
                         Text("100%")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 10, weight: .heavy))
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 8, weight: .bold))
                     }
@@ -232,23 +308,22 @@ public struct MixerView: View {
                     .padding(.horizontal, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(isCurrentPreset(1.0) ? Color.cyan : Color.white.opacity(0.12))
+                            .fill(isCurrentPreset(1.0) ? Color.cyan : Color.cyan.opacity(0.15))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.cyan.opacity(0.7), lineWidth: 1)
+                            .stroke(Color.cyan.opacity(0.8), lineWidth: 1)
                     )
                     .foregroundColor(isCurrentPreset(1.0) ? .black : .cyan)
+                    .shadow(color: isCurrentPreset(1.0) ? Color.cyan.opacity(0.3) : .clear, radius: 4)
                 }
                 .buttonStyle(.plain)
                 .help("Reset to 100% (Standard Mac Volume)")
 
                 // 120%
                 presetButton(value: 1.20, label: "120%", isBoost: true)
-
                 // 150%
                 presetButton(value: 1.50, label: "150%", isBoost: true)
-
                 // 200%
                 presetButton(value: 2.00, label: "200%", isBoost: true)
 
@@ -256,94 +331,211 @@ public struct MixerView: View {
                 Button(action: { model.stepVolume(delta: 0.10) }) {
                     Image(systemName: "plus")
                         .font(.system(size: 10, weight: .bold))
-                        .frame(width: 26, height: 26)
+                        .frame(width: 28, height: 26)
                         .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.12), lineWidth: 0.8))
                         .foregroundColor(.primary)
                 }
                 .buttonStyle(.plain)
                 .help("Increase volume by 10%")
             }
 
-            // Dual Channel Real-Time VU Meters
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
-                    vuBar(label: "L", value: model.peakLeft)
-                    vuBar(label: "R", value: model.peakRight)
+            // ACTIVE AUDIO CHANNELS & STUDIO VU METERS (Direct Response to User Request)
+            VStack(spacing: 6) {
+                HStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform.path")
+                            .font(.system(size: 9))
+                            .foregroundColor(model.isChannelActive ? .green : .secondary)
+                        Text("ACTIVE AUDIO CHANNELS")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    // Active sound source indicator (e.g. Spotify track)
+                    if appDetector.anyAppPlaying {
+                        HStack(spacing: 4) {
+                            EqualizerWaveView(isPlaying: true, color: .green)
+                            Text(appDetector.activeAudioSourceTitle)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.cyan)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    } else {
+                        Text("Ch 1 & Ch 2 Direct")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
                 }
 
-                // Safety Badge
-                safetyBadgeView
-            }
+                // Channel 1: Left
+                ChannelVUMeterRow(
+                    channelBadge: "CH 1 • L",
+                    peak: model.peakLeft,
+                    dbText: model.channel1DbString,
+                    isActive: model.isChannelActive
+                )
 
-            // High-Pass Filter Toggle
-            Toggle(isOn: $model.speakerProtection) {
-                HStack(spacing: 4) {
-                    Text("55Hz Speaker Protection (Cuts destructive sub-bass)")
+                // Channel 2: Right
+                ChannelVUMeterRow(
+                    channelBadge: "CH 2 • R",
+                    peak: model.peakRight,
+                    dbText: model.channel2DbString,
+                    isActive: model.isChannelActive
+                )
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.25))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                    )
+            )
+
+            // High-Pass Filter Toggle & Safety Badge
+            HStack {
+                Toggle(isOn: $model.speakerProtection) {
+                    Text("55Hz Speaker Protection (Cuts damaging sub-bass)")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
+                .toggleStyle(.checkbox)
+
+                Spacer()
+
+                safetyBadgeView
             }
-            .toggleStyle(.checkbox)
         }
-        .padding(12)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(white: 0.12).opacity(0.45))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.18), Color.white.opacity(0.05)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
                 )
         )
     }
 
-    // MARK: - Tab 1: Per-App Mixer Card
+    // MARK: - Tab 1: Per-App Audio Routing Card (Direct Response to User Request)
     private var perAppMixerCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Per-App Audio Mixer")
-                    .font(.system(size: 12, weight: .bold))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Per-App Audio Routing")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text("Live activity, volume & stereo balance per app")
+                        .font(.system(size: 9.5))
+                        .foregroundColor(.secondary)
+                }
+
                 Spacer()
+
                 Text("\(appDetector.apps.count) Apps Active")
-                    .font(.system(size: 10))
+                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                     .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 ForEach(appDetector.apps) { track in
                     appRow(track: track)
                 }
             }
         }
-        .padding(12)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(white: 0.12).opacity(0.45))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.18), Color.white.opacity(0.05)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
                 )
         )
     }
 
     private func appRow(track: DiscoveredAudioApp) -> some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            // App Header Row: Icon, Title, Sound Activity Indicator, Mute, Volume %
             HStack(spacing: 8) {
+                // App Icon
                 if let icon = track.icon {
                     Image(nsImage: icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 18, height: 18)
-                        .cornerRadius(4)
+                        .frame(width: 22, height: 22)
+                        .cornerRadius(5)
                 } else {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 12))
-                        .frame(width: 18)
-                        .foregroundColor(.cyan)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.cyan.opacity(0.2))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "music.note")
+                            .font(.system(size: 11))
+                            .foregroundColor(.cyan)
+                    }
                 }
 
-                Text(track.name)
-                    .font(.system(size: 11, weight: .medium))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(track.name)
+                            .font(.system(size: 11.5, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+
+                        // ACTIVE SOUND INDICATOR NEXT TO APP
+                        if track.isPlaying {
+                            HStack(spacing: 3) {
+                                EqualizerWaveView(isPlaying: true, color: .green)
+                                Text("PLAYING")
+                                    .font(.system(size: 7.5, weight: .heavy, design: .monospaced))
+                                    .foregroundColor(.green)
+                            }
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(Color.green.opacity(0.18)))
+                            .overlay(Capsule().stroke(Color.green.opacity(0.5), lineWidth: 0.7))
+                        } else {
+                            Text("IDLE")
+                                .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.7))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color.white.opacity(0.05)))
+                        }
+                    }
+
+                    // Track Name (if Spotify / Music playing)
+                    if let now = track.nowPlaying, !now.isEmpty {
+                        Text(now)
+                            .font(.system(size: 9))
+                            .foregroundColor(.cyan.opacity(0.85))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
 
                 Spacer()
 
@@ -353,7 +545,7 @@ public struct MixerView: View {
                         Text(track.isSharedToCall ? "In Call" : "+ Call")
                             .font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.vertical, 2.5)
                             .background(
                                 Capsule()
                                     .fill(track.isSharedToCall ? Color.cyan.opacity(0.3) : Color.white.opacity(0.08))
@@ -363,59 +555,103 @@ public struct MixerView: View {
                     .buttonStyle(.plain)
                 }
 
-                // Mute
+                // Mute Button
                 Button(action: { appDetector.toggleMute(for: track.id) }) {
                     Image(systemName: track.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(track.isMuted ? .red : .secondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(track.isMuted ? .red : (track.isPlaying ? .cyan : .secondary))
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle()
+                                .fill(track.isMuted ? Color.red.opacity(0.15) : Color.white.opacity(0.06))
+                        )
                 }
                 .buttonStyle(.plain)
 
-                // Volume %
-                Text("\(Int(track.volume * 100))%")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .frame(width: 36, alignment: .trailing)
+                // Volume % Readout
+                Text("\(Int(round(track.volume * 100)))%")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(track.volume > 1.0 ? .orange : .white)
+                    .frame(width: 38, alignment: .trailing)
             }
 
-            // Volume Slider + L/R Pan
-            HStack(spacing: 10) {
+            // ACTIVE CHANNEL LEVEL METERS & SLIDERS (Direct Response to User Request)
+            HStack(spacing: 8) {
+                // Live Stereo Channel Level Bars right next to slider
+                VStack(spacing: 2) {
+                    HStack(spacing: 2) {
+                        Text("L")
+                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .foregroundColor(track.isPlaying && !track.isMuted ? .cyan : .secondary)
+                        AppMiniVUBar(level: track.activityLevelL, isPlaying: track.isPlaying && !track.isMuted)
+                    }
+                    HStack(spacing: 2) {
+                        Text("R")
+                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .foregroundColor(track.isPlaying && !track.isMuted ? .cyan : .secondary)
+                        AppMiniVUBar(level: track.activityLevelR, isPlaying: track.isPlaying && !track.isMuted)
+                    }
+                }
+                .frame(width: 48)
+
+                // App Volume Slider (0% to 200%)
                 Slider(value: Binding(
                     get: { track.volume },
                     set: { appDetector.setVolume(for: track.id, volume: $0) }
                 ), in: 0.0...2.0)
-                .opacity(track.isMuted ? 0.3 : 1.0)
+                .opacity(track.isMuted ? 0.35 : 1.0)
+                .accentColor(track.volume > 1.0 ? .orange : .cyan)
 
-                // Panning Indicator / Slider
-                HStack(spacing: 3) {
+                // Panning Slider
+                HStack(spacing: 2) {
                     Text("L")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 7.5, weight: .bold))
                         .foregroundColor(.secondary)
                     Slider(value: Binding(
                         get: { track.pan },
                         set: { appDetector.setPan(for: track.id, pan: $0) }
                     ), in: -1.0...1.0)
-                    .frame(width: 50)
+                    .frame(width: 44)
                     Text("R")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 7.5, weight: .bold))
                         .foregroundColor(.secondary)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(track.isPlaying ? Color.cyan.opacity(0.3) : Color.white.opacity(0.06), lineWidth: 0.8)
+                )
+        )
     }
 
     // MARK: - Tab 2: 10-Band Equalizer Card
     private var equalizerCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("10-Band Graphic Equalizer")
-                    .font(.system(size: 12, weight: .bold))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("10-Band Graphic Equalizer")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text("Pro-grade biquad peak & shelving filters")
+                        .font(.system(size: 9.5))
+                        .foregroundColor(.secondary)
+                }
+
                 Spacer()
+
                 Button("Reset Flat") {
                     equalizer.resetToFlat()
                 }
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundColor(.cyan)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.cyan.opacity(0.15)))
                 .buttonStyle(.plain)
             }
 
@@ -427,7 +663,6 @@ public struct MixerView: View {
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
                             .foregroundColor(band.gainDb == 0 ? .secondary : (band.gainDb > 0 ? .cyan : .orange))
 
-                        // Custom Vertical Slider
                         VerticalEQSlider(
                             value: Binding(
                                 get: { band.gainDb },
@@ -446,13 +681,13 @@ public struct MixerView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
         }
-        .padding(12)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(white: 0.12).opacity(0.45))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 )
         )
     }
@@ -461,7 +696,8 @@ public struct MixerView: View {
     private var presetsCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Acoustic Presets")
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -475,7 +711,7 @@ public struct MixerView: View {
                                     RoundedRectangle(cornerRadius: 6)
                                         .fill(model.activePreset == preset ? Color.cyan : Color.white.opacity(0.08))
                                 )
-                                .foregroundColor(model.activePreset == preset ? .black : .primary)
+                                .foregroundColor(model.activePreset == preset ? .black : .white)
                         }
                         .buttonStyle(.plain)
                     }
@@ -483,13 +719,13 @@ public struct MixerView: View {
             }
 
             Text(model.activePreset.description)
-                .font(.system(size: 9))
+                .font(.system(size: 9.5))
                 .foregroundColor(.secondary)
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+                .fill(Color(white: 0.12).opacity(0.45))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
@@ -506,6 +742,7 @@ public struct MixerView: View {
                     .foregroundColor(.cyan)
                 Text("Background Noise Isolation (Downward Gate)")
                     .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
                 Spacer()
                 Toggle("", isOn: $equalizer.noiseGateEnabled)
                     .toggleStyle(.switch)
@@ -524,6 +761,7 @@ public struct MixerView: View {
                     Slider(value: $equalizer.noiseGateThresholdDb, in: -60.0...(-24.0), step: 1.0)
                     Text("\(Int(equalizer.noiseGateThresholdDb)) dB")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.cyan)
                         .frame(width: 44, alignment: .trailing)
                 }
                 .padding(.top, 4)
@@ -532,7 +770,7 @@ public struct MixerView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+                .fill(Color(white: 0.12).opacity(0.45))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
@@ -546,6 +784,7 @@ public struct MixerView: View {
             HStack {
                 Text("System Audio Output Routing")
                     .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
                 Spacer()
                 Button(action: { deviceManager.refreshDevices() }) {
                     Image(systemName: "arrow.clockwise")
@@ -569,7 +808,7 @@ public struct MixerView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(dev.name)
                                     .font(.system(size: 11, weight: dev.isDefault ? .bold : .medium))
-                                    .foregroundColor(dev.isDefault ? .primary : .secondary)
+                                    .foregroundColor(dev.isDefault ? .white : .secondary)
                                 if dev.isDefault {
                                     Text("Active System Output")
                                         .font(.system(size: 9))
@@ -588,7 +827,7 @@ public struct MixerView: View {
                         .padding(8)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(dev.isDefault ? Color.cyan.opacity(0.1) : Color.white.opacity(0.04))
+                                .fill(dev.isDefault ? Color.cyan.opacity(0.12) : Color.white.opacity(0.04))
                         )
                     }
                     .buttonStyle(.plain)
@@ -598,7 +837,7 @@ public struct MixerView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+                .fill(Color(white: 0.12).opacity(0.45))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
@@ -625,6 +864,7 @@ public struct MixerView: View {
                     .foregroundColor(.cyan)
                 Text("Share Music in Calls (Loopback)")
                     .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
                 Spacer()
                 Toggle("", isOn: $model.shareMusicInCall)
                     .toggleStyle(.switch)
@@ -642,94 +882,43 @@ public struct MixerView: View {
                         Toggle(isOn: $model.autoDuckingEnabled) {
                             Text("Auto-Ducking (-18dB on Speech)")
                                 .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
                         }
                         .toggleStyle(.checkbox)
 
                         Spacer()
 
-                        // Speaking status indicator
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(vad.isSpeaking ? Color.green : Color.secondary.opacity(0.5))
+                                .fill(vad.isSpeaking ? Color.green : Color.secondary.opacity(0.4))
                                 .frame(width: 6, height: 6)
-                            Text(vad.isSpeaking ? "Speaking (Ducked)" : "Mic Ready")
-                                .font(.system(size: 9, weight: .bold))
+                            Text(vad.isSpeaking ? "Speaking" : "Quiet")
+                                .font(.system(size: 9, weight: .medium))
                                 .foregroundColor(vad.isSpeaking ? .green : .secondary)
                         }
                     }
-
-                    // Live Mic VU Meter Bar
-                    HStack(spacing: 6) {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary)
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color.white.opacity(0.1))
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(vad.isSpeaking ? Color.green : Color.cyan)
-                                    .frame(width: geo.size.width * CGFloat(vad.micLevelLinear))
-                            }
-                        }
-                        .frame(height: 6)
-                        Text(String(format: "%.0f dB", vad.micLevelDb))
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .frame(width: 38, alignment: .trailing)
-                    }
                 }
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.cyan.opacity(0.08)))
             }
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(model.shareMusicInCall ? Color.cyan.opacity(0.08) : Color.white.opacity(0.05))
+                .fill(Color(white: 0.12).opacity(0.45))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(model.shareMusicInCall ? Color.cyan.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
         )
     }
 
-    // MARK: - VU Meter Bar
-    private func vuBar(label: String, value: Float) -> some View {
-        HStack(spacing: 4) {
-            Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
-                .frame(width: 8)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.1))
-
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(
-                            LinearGradient(
-                                colors: [.green, .yellow, .orange],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geo.size.width * CGFloat(min(max(value, 0.0), 1.0)))
-                }
-            }
-            .frame(height: 6)
-        }
-    }
-
-    // MARK: - Safety Badge
+    // MARK: - Safety Badge View
     private var safetyBadgeView: some View {
         HStack(spacing: 4) {
             Circle()
                 .fill(safetyColor)
-                .frame(width: 6, height: 6)
+                .frame(width: 5, height: 5)
             Text(safetyText)
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 8, weight: .heavy, design: .monospaced))
                 .foregroundColor(safetyColor)
         }
         .padding(.horizontal, 6)
@@ -755,8 +944,8 @@ public struct MixerView: View {
 
     private func boostColor(for val: Float) -> Color {
         if val <= 1.0 { return .cyan }
-        if val <= 2.5 { return .green }
-        if val <= 4.0 { return .yellow }
+        if val <= 1.5 { return .green }
+        if val <= 2.0 { return .yellow }
         return .orange
     }
 
@@ -783,12 +972,12 @@ public struct MixerView: View {
                         .stroke(
                             active ? (isBoost ? Color.orange : Color.cyan) :
                             (isBoost ? Color.orange.opacity(0.3) : Color.white.opacity(0.1)),
-                            lineWidth: 1
+                            lineWidth: 0.8
                         )
                 )
                 .foregroundColor(
                     active ? (isBoost ? .white : .black) :
-                    (isBoost ? .orange : .primary)
+                    (isBoost ? .orange : .white)
                 )
         }
         .buttonStyle(.plain)
@@ -836,6 +1025,111 @@ public struct MixerView: View {
             .font(.system(size: 10))
             .foregroundColor(.secondary)
             .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Helper Views: Animated Equalizer Wave
+public struct EqualizerWaveView: View {
+    @State private var phase: CGFloat = 0.0
+    var isPlaying: Bool
+    var color: Color = .green
+
+    public var body: some View {
+        HStack(spacing: 1.5) {
+            ForEach(0..<4) { i in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(isPlaying ? color : Color.white.opacity(0.25))
+                    .frame(width: 2, height: isPlaying ? barHeight(for: i) : 3)
+            }
+        }
+        .frame(height: 11)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.35).repeatForever(autoreverses: true)) {
+                phase = 1.0
+            }
+        }
+    }
+
+    private func barHeight(for index: Int) -> CGFloat {
+        let pattern: [CGFloat] = [
+            phase == 0.0 ? 3 : 11,
+            phase == 0.0 ? 9 : 4,
+            phase == 0.0 ? 5 : 10,
+            phase == 0.0 ? 10 : 3
+        ]
+        return pattern[index % pattern.count]
+    }
+}
+
+// MARK: - Helper Views: Channel Stereo VU Meter Row
+public struct ChannelVUMeterRow: View {
+    let channelBadge: String // "CH 1 • L" or "CH 2 • R"
+    let peak: Float
+    let dbText: String
+    let isActive: Bool
+
+    public var body: some View {
+        HStack(spacing: 8) {
+            Text(channelBadge)
+                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                .foregroundColor(isActive ? .cyan : .secondary)
+                .frame(width: 48, alignment: .leading)
+
+            // Segmented Gradient VU Track
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.08))
+
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.green,
+                                    Color.cyan,
+                                    peak > 0.75 ? Color.orange : Color.cyan
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(0, min(geo.size.width * CGFloat(peak), geo.size.width)))
+                        .shadow(color: isActive ? Color.cyan.opacity(0.5) : .clear, radius: 3)
+                }
+            }
+            .frame(height: 5)
+
+            Text(dbText)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(isActive ? (peak > 0.8 ? .orange : .white) : .secondary.opacity(0.6))
+                .frame(width: 46, alignment: .trailing)
+        }
+    }
+}
+
+// MARK: - Helper Views: Mini App VU Bar
+public struct AppMiniVUBar: View {
+    let level: Float
+    let isPlaying: Bool
+
+    public var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.white.opacity(0.08))
+                .frame(width: 32, height: 3.5)
+
+            if isPlaying && level > 0 {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(
+                        LinearGradient(
+                            colors: [.green, .cyan],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(2, min(CGFloat(level) * 32, 32)), height: 3.5)
+            }
         }
     }
 }

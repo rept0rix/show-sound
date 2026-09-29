@@ -63,11 +63,17 @@ public final class MixerModel: ObservableObject {
     @Published public var autoDuckingEnabled: Bool = true
     @Published public var duckingLevelDb: Float = 18.0
 
-    // Real-Time Audio Telemetry
+    // Real-Time Audio Telemetry & Active Channel Telemetry
     @Published public var peakLeft: Float = 0.45
     @Published public var peakRight: Float = 0.48
     @Published public var safetyState: GainGuardDSP.SafetyState = .safe
     @Published public var gainReductionDb: Float = 0.0
+    
+    @Published public var isChannelActive: Bool = false
+    @Published public var channel1Db: Float = -12.4
+    @Published public var channel2Db: Float = -11.8
+    @Published public var channel1DbString: String = "-12.4 dB"
+    @Published public var channel2DbString: String = "-11.8 dB"
 
     // References to specialized sub-managers
     public var appDetector: AppDetector { AppDetector.shared }
@@ -168,8 +174,18 @@ public final class MixerModel: ObservableObject {
     }
 
     private func tickLiveMeters() {
-        let baseL = Float.random(in: 0.35...0.65) * (masterBoost / 1.8)
-        let baseR = Float.random(in: 0.35...0.65) * (masterBoost / 1.8)
+        let isMuted = audioController.isMuted || masterBoost <= 0.001
+        let hasSignal = !isMuted && (appDetector.anyAppPlaying || masterBoost > 0.05)
+        
+        let baseL: Float
+        let baseR: Float
+        if hasSignal {
+            baseL = Float.random(in: 0.35...0.70) * min(masterBoost, 1.2)
+            baseR = Float.random(in: 0.35...0.70) * min(masterBoost, 1.2)
+        } else {
+            baseL = 0.0
+            baseR = 0.0
+        }
 
         var lSamples: [Float] = [baseL]
         var rSamples: [Float] = [baseR]
@@ -194,10 +210,25 @@ public final class MixerModel: ObservableObject {
                 )
 
                 DispatchQueue.main.async {
-                    self.peakLeft = telem.peakLeft
-                    self.peakRight = telem.peakRight
+                    self.peakLeft = hasSignal ? telem.peakLeft : 0.0
+                    self.peakRight = hasSignal ? telem.peakRight : 0.0
                     self.safetyState = telem.safetyState
                     self.gainReductionDb = telem.gainReductionDb
+                    self.isChannelActive = hasSignal && (telem.peakLeft > 0.05 || telem.peakRight > 0.05)
+
+                    if self.isChannelActive {
+                        let lDb = 20.0 * log10(max(telem.peakLeft, 0.001))
+                        let rDb = 20.0 * log10(max(telem.peakRight, 0.001))
+                        self.channel1Db = lDb
+                        self.channel2Db = rDb
+                        self.channel1DbString = String(format: "%.1f dB", lDb)
+                        self.channel2DbString = String(format: "%.1f dB", rDb)
+                    } else {
+                        self.channel1Db = -60.0
+                        self.channel2Db = -60.0
+                        self.channel1DbString = "-∞ dB"
+                        self.channel2DbString = "-∞ dB"
+                    }
                 }
             }
         }
