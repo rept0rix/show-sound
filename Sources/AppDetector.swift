@@ -100,12 +100,28 @@ public final class AppDetector: ObservableObject {
         let runningApps = NSWorkspace.shared.runningApplications
         var detected: [DiscoveredAudioApp] = []
         
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        let myBundleID = Bundle.main.bundleIdentifier ?? "com.showsound.app"
+        
         for app in runningApps where app.activationPolicy == .regular {
+            // Strictly exclude Show Sound itself from being listed as an audio app in its own mixer
+            if app.processIdentifier == myPID { continue }
             guard let bundleID = app.bundleIdentifier else { continue }
-            let name = app.localizedName ?? bundleID
+            if bundleID == myBundleID || bundleID == "com.showsound.app" { continue }
             
+            let name = app.localizedName ?? bundleID
             let lowerBid = bundleID.lowercased()
             let lowerName = name.lowercased()
+            
+            if lowerName.contains("show sound") || lowerName.contains("showsound") || lowerBid.contains("showsound") {
+                continue
+            }
+            
+            // Also exclude Finder, Dock, System items
+            if bundleID == "com.apple.finder" || bundleID == "com.apple.dock" {
+                continue
+            }
+            
             let isMedia = knownAudioBundleIDs.contains(bundleID)
                 || lowerBid.contains("music")
                 || lowerBid.contains("audio")
@@ -160,6 +176,14 @@ public final class AppDetector: ObservableObject {
                 DiscoveredAudioApp(id: "net.whatsapp.WhatsApp", name: "WhatsApp", icon: nil, volume: 1.0, pan: -0.6, isSharedToCall: false),
                 DiscoveredAudioApp(id: "com.apple.Safari", name: "Safari", icon: nil, volume: 1.0, pan: 0.0, isSharedToCall: false)
             ]
+        }
+        
+        // Final sanity filter: ensure self is never in the mixer list
+        detected.removeAll { app in
+            app.id == myBundleID ||
+            app.id == "com.showsound.app" ||
+            app.name.lowercased().contains("show sound") ||
+            app.name.lowercased().contains("showsound")
         }
         
         // Put actively playing apps at top
