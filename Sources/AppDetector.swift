@@ -216,9 +216,9 @@ public final class AppDetector: ObservableObject {
             // 1. Spotify
             var spotifyPlaying = false
             var spotifyTrack: String? = nil
-            let spotifyScript = """
-            if application "Spotify" is running then
-                tell application "Spotify"
+            if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").isEmpty {
+                let spotifyScript = """
+                tell application id "com.spotify.client"
                     try
                         set s to player state as string
                         if s is "playing" then
@@ -230,41 +230,41 @@ public final class AppDetector: ObservableObject {
                         end if
                     end try
                 end tell
-            end if
-            return "closed||"
-            """
-            if let result = NSAppleScript(source: spotifyScript)?.executeAndReturnError(nil).stringValue {
-                let parts = result.components(separatedBy: "||")
-                if parts.first == "playing" {
-                    spotifyPlaying = true
-                    if parts.count > 1 && !parts[1].isEmpty {
-                        spotifyTrack = parts[1]
+                return "closed||"
+                """
+                if let result = NSAppleScript(source: spotifyScript)?.executeAndReturnError(nil).stringValue {
+                    let parts = result.components(separatedBy: "||")
+                    if parts.first == "playing" {
+                        spotifyPlaying = true
+                        if parts.count > 1 && !parts[1].isEmpty {
+                            spotifyTrack = parts[1]
+                        }
                     }
                 }
             }
             
             // 2. Google Chrome Active Tab
             var chromeTab: String? = nil
-            let chromeScript = """
-            if application "Google Chrome" is running then
-                tell application "Google Chrome"
+            if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome").isEmpty {
+                let chromeScript = """
+                tell application id "com.google.Chrome"
                     try
                         return title of active tab of front window
                     end try
                 end tell
-            end if
-            return ""
-            """
-            if let res = NSAppleScript(source: chromeScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
-                chromeTab = res
+                return ""
+                """
+                if let res = NSAppleScript(source: chromeScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
+                    chromeTab = res
+                }
             }
             
             // 3. Apple Music
             var musicPlaying = false
             var musicTrack: String? = nil
-            let musicScript = """
-            if application "Music" is running then
-                tell application "Music"
+            if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty {
+                let musicScript = """
+                tell application id "com.apple.Music"
                     try
                         set s to player state as string
                         if s is "playing" then
@@ -276,49 +276,49 @@ public final class AppDetector: ObservableObject {
                         end if
                     end try
                 end tell
-            end if
-            return "closed||"
-            """
-            if let result = NSAppleScript(source: musicScript)?.executeAndReturnError(nil).stringValue {
-                let parts = result.components(separatedBy: "||")
-                if parts.first == "playing" {
-                    musicPlaying = true
-                    if parts.count > 1 && !parts[1].isEmpty {
-                        musicTrack = parts[1]
+                return "closed||"
+                """
+                if let result = NSAppleScript(source: musicScript)?.executeAndReturnError(nil).stringValue {
+                    let parts = result.components(separatedBy: "||")
+                    if parts.first == "playing" {
+                        musicPlaying = true
+                        if parts.count > 1 && !parts[1].isEmpty {
+                            musicTrack = parts[1]
+                        }
                     }
                 }
             }
             
             // 4. Safari Tab
             var safariTab: String? = nil
-            let safariScript = """
-            if application "Safari" is running then
-                tell application "Safari"
+            if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Safari").isEmpty {
+                let safariScript = """
+                tell application id "com.apple.Safari"
                     try
                         return name of current tab of front window
                     end try
                 end tell
-            end if
-            return ""
-            """
-            if let res = NSAppleScript(source: safariScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
-                safariTab = res
+                return ""
+                """
+                if let res = NSAppleScript(source: safariScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
+                    safariTab = res
+                }
             }
             
             // 5. Arc Browser Tab
             var arcTab: String? = nil
-            let arcScript = """
-            if application "Arc" is running then
-                tell application "Arc"
+            if !NSRunningApplication.runningApplications(withBundleIdentifier: "company.thebrowser.Browser").isEmpty {
+                let arcScript = """
+                tell application id "company.thebrowser.Browser"
                     try
                         return title of active tab of front window
                     end try
                 end tell
-            end if
-            return ""
-            """
-            if let res = NSAppleScript(source: arcScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
-                arcTab = res
+                return ""
+                """
+                if let res = NSAppleScript(source: arcScript)?.executeAndReturnError(nil).stringValue, !res.isEmpty {
+                    arcTab = res
+                }
             }
             
             DispatchQueue.main.async {

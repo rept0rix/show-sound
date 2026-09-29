@@ -183,22 +183,23 @@ public final class SystemAudioController: ObservableObject {
 
     // MARK: - Per-App Volume Dispatcher
     public func setAppVolume(bundleID: String, volume: Float) {
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty else { return }
         let volPercent = min(100, max(0, Int(volume * 100)))
 
         scriptQueue.async {
             switch bundleID {
             case "com.spotify.client":
-                let script = "if application \"Spotify\" is running then tell application \"Spotify\" to set sound volume to \(volPercent)"
+                let script = "tell application id \"com.spotify.client\" to set sound volume to \(volPercent)"
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             case "com.apple.Music":
-                let script = "if application \"Music\" is running then tell application \"Music\" to set sound volume to \(volPercent)"
+                let script = "tell application id \"com.apple.Music\" to set sound volume to \(volPercent)"
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             case "org.videolan.vlc":
                 let vlcVol = Int(volume * 256)
-                let script = "if application \"VLC\" is running then tell application \"VLC\" to set volume to \(vlcVol)"
+                let script = "tell application id \"org.videolan.vlc\" to set volume to \(vlcVol)"
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             case "com.colliderli.iina":
-                let script = "if application \"IINA\" is running then tell application \"IINA\" to set sound volume to \(volPercent)"
+                let script = "tell application id \"com.colliderli.iina\" to set sound volume to \(volPercent)"
                 NSAppleScript(source: script)?.executeAndReturnError(nil)
             default:
                 break
