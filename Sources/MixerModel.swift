@@ -40,8 +40,8 @@ public enum AudioPreset: String, CaseIterable, Identifiable {
 public final class MixerModel: ObservableObject {
     public static let shared = MixerModel()
 
-    // Master Boost (1.0 = 100%, up to 6.0 = 600%)
-    @Published public var masterBoost: Float = 1.0
+    // Master Boost (0.0 = 0%, 1.0 = 100%, up to 3.0 = 300% / 6.0 = 600%)
+    @Published public var masterBoost: Float = 0.70
     @Published public var speakerProtection: Bool = true
     @Published public var masterPan: Float = 0.0
     @Published public var activePreset: AudioPreset = .safeDefault {
@@ -74,13 +74,19 @@ public final class MixerModel: ObservableObject {
     public var deviceManager: AudioDeviceManager { AudioDeviceManager.shared }
     public var equalizer: EqualizerEngine { EqualizerEngine.shared }
     public var vad: VoiceActivityDetector { VoiceActivityDetector.shared }
+    public var audioController: SystemAudioController { SystemAudioController.shared }
 
     private var telemetryTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     public init() {
+        // Read current system hardware volume
+        let initVol = SystemAudioController.shared.hardwareVolume
+        self.masterBoost = initVol > 0.0 ? initVol : 0.70
+        
         startTelemetryLoop()
         bindSubManagers()
+        bindHardwareAudio()
     }
 
     private func bindSubManagers() {
@@ -100,6 +106,58 @@ public final class MixerModel: ObservableObject {
         vad.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }.store(in: &cancellables)
+
+        audioController.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
+    }
+
+    private func bindHardwareAudio() {
+        // Sync external macOS hardware volume changes (e.g. keyboard F11/F12) to masterBoost
+        audioController.$hardwareVolume
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] hwVol in
+                guard let self = self else { return }
+                // Only sync if currently in normal volume range (<= 1.0) and notable difference
+                if self.masterBoost <= 1.05 && abs(self.masterBoost - hwVol) > 0.02 {
+                    self.masterBoost = hwVol
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Master SafeBoost Controls
+    public func setBoost(to value: Float) {
+        let clamped = max(0.0, min(6.0, value))
+        self.masterBoost = clamped
+
+        if clamped <= 1.0 {
+            // Within standard hardware range: directly set Mac hardware volume
+            audioController.setHardwareVolume(clamped)
+        } else {
+            // Above 100%: keep physical hardware at 100%, digital headroom boosted by DSP limiter
+            audioController.setHardwareVolume(1.0)
+        }
+    }
+
+    public func resetTo100() {
+        setBoost(to: 1.0)
+    }
+
+    public func stepVolume(delta: Float) {
+        var next = round((masterBoost + delta) * 100) / 100.0
+        if next < 0.0 { next = 0.0 }
+        if next > 6.0 { next = 6.0 }
+        setBoost(to: next)
+    }
+
+    public func setBoostPreset(_ target: Float) {
+        setBoost(to: target)
+    }
+
+    public func toggleMasterMute() {
+        let currentlyMuted = audioController.isMuted
+        audioController.setMute(!currentlyMuted)
     }
 
     private func startTelemetryLoop() {

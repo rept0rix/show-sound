@@ -144,6 +144,7 @@ public final class AppDetector: ObservableObject {
         if let idx = apps.firstIndex(where: { $0.id == id }) {
             apps[idx].volume = volume
             savePreference(for: id, volume: volume, pan: apps[idx].pan, isMuted: apps[idx].isMuted, isSharedToCall: apps[idx].isSharedToCall)
+            SystemAudioController.shared.setAppVolume(bundleID: id, volume: volume)
         }
     }
     
@@ -157,7 +158,9 @@ public final class AppDetector: ObservableObject {
     public func toggleMute(for id: String) {
         if let idx = apps.firstIndex(where: { $0.id == id }) {
             apps[idx].isMuted.toggle()
-            savePreference(for: id, volume: apps[idx].volume, pan: apps[idx].pan, isMuted: apps[idx].isMuted, isSharedToCall: apps[idx].isSharedToCall)
+            let isMuted = apps[idx].isMuted
+            savePreference(for: id, volume: apps[idx].volume, pan: apps[idx].pan, isMuted: isMuted, isSharedToCall: apps[idx].isSharedToCall)
+            SystemAudioController.shared.setAppMuted(bundleID: id, isMuted: isMuted)
         }
     }
     

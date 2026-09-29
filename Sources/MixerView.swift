@@ -154,26 +154,115 @@ public struct MixerView: View {
     // MARK: - Tab 1: Master SafeBoost Card
     private var masterBoostCard: some View {
         VStack(spacing: 12) {
-            HStack {
+            HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Master SafeBoost")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.primary)
-                    Text("Amplifies without digital square-wave distortion")
+                    Text("Direct macOS hardware volume & dynamic limiter")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
                 Spacer()
 
-                // Percentage Readout
-                Text("\(Int(model.masterBoost * 100))%")
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .foregroundColor(boostColor(for: model.masterBoost))
+                // Quick Reset Pill & Percentage Readout
+                HStack(spacing: 6) {
+                    if abs(model.masterBoost - 1.0) > 0.02 {
+                        Button(action: { model.resetTo100() }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 9, weight: .bold))
+                                Text("Reset")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                            .foregroundColor(.cyan)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Reset volume to standard 100%")
+                    }
+
+                    Text("\(Int(round(model.masterBoost * 100)))%")
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        .foregroundColor(boostColor(for: model.masterBoost))
+                }
             }
 
             // Big Slider
-            Slider(value: $model.masterBoost, in: 0.5...6.0, step: 0.05)
-                .accentColor(boostColor(for: model.masterBoost))
+            Slider(value: Binding(
+                get: { model.masterBoost },
+                set: { model.setBoost(to: $0) }
+            ), in: 0.0...3.0, step: 0.01)
+            .accentColor(boostColor(for: model.masterBoost))
+
+            // Quick Volume Presets & Stepper Buttons Row:
+            // [-] 30% 50% 70% [100% Reset] 120% 150% 200% [+]
+            HStack(spacing: 4) {
+                // Stepper [-]
+                Button(action: { model.stepVolume(delta: -0.10) }) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 26, height: 26)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+                .help("Decrease volume by 10%")
+
+                // 30%
+                presetButton(value: 0.30, label: "30%")
+
+                // 50%
+                presetButton(value: 0.50, label: "50%")
+
+                // 70%
+                presetButton(value: 0.70, label: "70%")
+
+                // 100% Reset Button
+                Button(action: { model.resetTo100() }) {
+                    HStack(spacing: 2) {
+                        Text("100%")
+                            .font(.system(size: 10, weight: .bold))
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .frame(height: 26)
+                    .padding(.horizontal, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(isCurrentPreset(1.0) ? Color.cyan : Color.white.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.cyan.opacity(0.7), lineWidth: 1)
+                    )
+                    .foregroundColor(isCurrentPreset(1.0) ? .black : .cyan)
+                }
+                .buttonStyle(.plain)
+                .help("Reset to 100% (Standard Mac Volume)")
+
+                // 120%
+                presetButton(value: 1.20, label: "120%", isBoost: true)
+
+                // 150%
+                presetButton(value: 1.50, label: "150%", isBoost: true)
+
+                // 200%
+                presetButton(value: 2.00, label: "200%", isBoost: true)
+
+                // Stepper [+]
+                Button(action: { model.stepVolume(delta: 0.10) }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 26, height: 26)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.08)))
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+                .help("Increase volume by 10%")
+            }
 
             // Dual Channel Real-Time VU Meters
             HStack(spacing: 8) {
@@ -669,6 +758,41 @@ public struct MixerView: View {
         if val <= 2.5 { return .green }
         if val <= 4.0 { return .yellow }
         return .orange
+    }
+
+    private func isCurrentPreset(_ val: Float) -> Bool {
+        return abs(model.masterBoost - val) < 0.03
+    }
+
+    private func presetButton(value: Float, label: String, isBoost: Bool = false) -> some View {
+        let active = isCurrentPreset(value)
+        return Button(action: { model.setBoost(to: value) }) {
+            Text(label)
+                .font(.system(size: 10, weight: active ? .bold : .medium))
+                .frame(maxWidth: .infinity)
+                .frame(height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            active ? (isBoost ? Color.orange : Color.cyan.opacity(0.85)) :
+                            (isBoost ? Color.orange.opacity(0.12) : Color.white.opacity(0.07))
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(
+                            active ? (isBoost ? Color.orange : Color.cyan) :
+                            (isBoost ? Color.orange.opacity(0.3) : Color.white.opacity(0.1)),
+                            lineWidth: 1
+                        )
+                )
+                .foregroundColor(
+                    active ? (isBoost ? .white : .black) :
+                    (isBoost ? .orange : .primary)
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Set volume to \(label)")
     }
 
     // MARK: - Footer
